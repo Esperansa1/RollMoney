@@ -184,7 +184,7 @@ export const getOverlayStyles = () => ({
     border: `2px solid ${Theme.colors.primary}`,
     borderRadius: Theme.borderRadius.xl,
     padding: Theme.spacing.md,
-    zIndex: Theme.zIndex.overlay,
+    zIndex: '99999', // Ensure always on top
     boxShadow: Theme.shadows.xl,
     fontFamily: Theme.typography.fontFamily,
     color: Theme.colors.onSurface,
@@ -192,5 +192,6 @@ export const getOverlayStyles = () => ({
     height: 'auto',
     maxHeight: '90vh',
     overflow: 'visible',
-    boxSizing: 'border-box'
+    boxSizing: 'border-box',
+    pointerEvents: 'auto' // Ensure interactivity
 });

@@ -60,7 +60,22 @@ export class MarketItemScraper {
 
         this.overlay = UIComponents.createOverlay();
         this.setupOverlayComponents();
+
+        // Ensure overlay is always appended to document.body and positioned absolutely
+        // This prevents it from being contained within any sidebar or container
         document.body.appendChild(this.overlay);
+
+        // Force absolute positioning to ensure it's above all content
+        // This prevents the overlay from being hidden in sidebars or containers
+        this.overlay.style.position = 'fixed';
+        this.overlay.style.zIndex = '99999'; // Higher than any possible sidebar z-index
+        this.overlay.style.pointerEvents = 'auto'; // Ensure it's interactive
+        this.overlay.style.display = 'block'; // Force visibility
+        this.overlay.style.visibility = 'visible'; // Ensure not hidden
+        this.overlay.style.left = 'auto'; // Reset any inherited left positioning
+        this.overlay.style.right = '20px'; // Set right positioning
+        this.overlay.style.top = '20px'; // Set top positioning
+
         DOMUtils.centerElementOnScreen(this.overlay);
     }
 
@@ -332,15 +347,11 @@ export class MarketItemScraper {
         // Status section
         const statusSection = this.createSellVerificationStatus();
 
-        // Data section
-        const dataSection = this.createSellVerificationData();
-
         // Logs section
         const logsSection = this.createSellVerificationLogs();
 
         container.appendChild(controlsSection);
         container.appendChild(statusSection);
-        container.appendChild(dataSection);
         container.appendChild(logsSection);
 
         // Start refresh timer for status updates
@@ -423,40 +434,6 @@ export class MarketItemScraper {
         return section;
     }
 
-    createSellVerificationData() {
-        const section = DOMUtils.createElement('div', {
-            marginBottom: Theme.spacing.lg,
-            padding: Theme.spacing.md,
-            backgroundColor: Theme.colors.surfaceVariant,
-            borderRadius: Theme.borderRadius.md,
-            border: `1px solid ${Theme.colors.border}`
-        });
-
-        const title = UIComponents.createLabel('Last Collected Data', {
-            fontSize: Theme.typography.fontSize.lg,
-            fontWeight: Theme.typography.fontWeight.bold,
-            marginBottom: Theme.spacing.md
-        });
-
-        const dataDisplay = DOMUtils.createElement('pre', {
-            backgroundColor: Theme.colors.surface,
-            padding: Theme.spacing.md,
-            borderRadius: Theme.borderRadius.sm,
-            fontSize: Theme.typography.fontSize.sm,
-            fontFamily: 'monospace',
-            whiteSpace: 'pre-wrap',
-            overflow: 'auto',
-            maxHeight: '200px',
-            border: `1px solid ${Theme.colors.border}`
-        });
-        dataDisplay.id = 'sell-verification-data-display';
-        dataDisplay.textContent = 'No data collected yet...';
-
-        section.appendChild(title);
-        section.appendChild(dataDisplay);
-
-        return section;
-    }
 
     createSellVerificationLogs() {
         const section = DOMUtils.createElement('div', {
@@ -533,7 +510,6 @@ export class MarketItemScraper {
 
     updateSellVerificationStatus() {
         const statusGrid = document.getElementById('sell-verification-status-grid');
-        const dataDisplay = document.getElementById('sell-verification-data-display');
         const logDisplay = document.getElementById('sell-verification-log-display');
 
         if (!statusGrid) return;
@@ -541,7 +517,6 @@ export class MarketItemScraper {
         const automationStatus = this.automationManager.getAutomationStatus('sell-item-verification');
         const isActive = this.sellItemVerification.isActive();
         const currentStep = this.sellItemVerification.getCurrentStep();
-        const collectedData = this.sellItemVerification.getCollectedData();
 
         // Update status grid
         const statusData = [
@@ -591,11 +566,6 @@ export class MarketItemScraper {
             statCard.appendChild(label);
             statusGrid.appendChild(statCard);
         });
-
-        // Update data display
-        if (dataDisplay && Object.keys(collectedData).length > 0) {
-            dataDisplay.textContent = JSON.stringify(collectedData, null, 2);
-        }
 
         // Update log display (show last few entries)
         if (logDisplay) {

@@ -286,7 +286,8 @@ var RollMoney = (() => {
         border: `2px solid ${Theme.colors.primary}`,
         borderRadius: Theme.borderRadius.xl,
         padding: Theme.spacing.md,
-        zIndex: Theme.zIndex.overlay,
+        zIndex: "99999",
+        // Ensure always on top
         boxShadow: Theme.shadows.xl,
         fontFamily: Theme.typography.fontFamily,
         color: Theme.colors.onSurface,
@@ -294,7 +295,9 @@ var RollMoney = (() => {
         height: "auto",
         maxHeight: "90vh",
         overflow: "visible",
-        boxSizing: "border-box"
+        boxSizing: "border-box",
+        pointerEvents: "auto"
+        // Ensure interactivity
       });
     }
   });
@@ -2557,6 +2560,14 @@ var RollMoney = (() => {
           this.overlay = UIComponents.createOverlay();
           this.setupOverlayComponents();
           document.body.appendChild(this.overlay);
+          this.overlay.style.position = "fixed";
+          this.overlay.style.zIndex = "99999";
+          this.overlay.style.pointerEvents = "auto";
+          this.overlay.style.display = "block";
+          this.overlay.style.visibility = "visible";
+          this.overlay.style.left = "auto";
+          this.overlay.style.right = "20px";
+          this.overlay.style.top = "20px";
           DOMUtils.centerElementOnScreen(this.overlay);
         }
         setupOverlayComponents() {
@@ -2764,11 +2775,9 @@ var RollMoney = (() => {
           });
           const controlsSection = this.createSellVerificationControls();
           const statusSection = this.createSellVerificationStatus();
-          const dataSection = this.createSellVerificationData();
           const logsSection = this.createSellVerificationLogs();
           container.appendChild(controlsSection);
           container.appendChild(statusSection);
-          container.appendChild(dataSection);
           container.appendChild(logsSection);
           setInterval(() => {
             this.updateSellVerificationStatus();
@@ -2831,36 +2840,6 @@ var RollMoney = (() => {
           statusGrid.id = "sell-verification-status-grid";
           section.appendChild(title);
           section.appendChild(statusGrid);
-          return section;
-        }
-        createSellVerificationData() {
-          const section = DOMUtils.createElement("div", {
-            marginBottom: Theme.spacing.lg,
-            padding: Theme.spacing.md,
-            backgroundColor: Theme.colors.surfaceVariant,
-            borderRadius: Theme.borderRadius.md,
-            border: `1px solid ${Theme.colors.border}`
-          });
-          const title = UIComponents.createLabel("Last Collected Data", {
-            fontSize: Theme.typography.fontSize.lg,
-            fontWeight: Theme.typography.fontWeight.bold,
-            marginBottom: Theme.spacing.md
-          });
-          const dataDisplay = DOMUtils.createElement("pre", {
-            backgroundColor: Theme.colors.surface,
-            padding: Theme.spacing.md,
-            borderRadius: Theme.borderRadius.sm,
-            fontSize: Theme.typography.fontSize.sm,
-            fontFamily: "monospace",
-            whiteSpace: "pre-wrap",
-            overflow: "auto",
-            maxHeight: "200px",
-            border: `1px solid ${Theme.colors.border}`
-          });
-          dataDisplay.id = "sell-verification-data-display";
-          dataDisplay.textContent = "No data collected yet...";
-          section.appendChild(title);
-          section.appendChild(dataDisplay);
           return section;
         }
         createSellVerificationLogs() {
@@ -2926,13 +2905,11 @@ var RollMoney = (() => {
         }
         updateSellVerificationStatus() {
           const statusGrid = document.getElementById("sell-verification-status-grid");
-          const dataDisplay = document.getElementById("sell-verification-data-display");
           const logDisplay = document.getElementById("sell-verification-log-display");
           if (!statusGrid) return;
           const automationStatus = this.automationManager.getAutomationStatus("sell-item-verification");
           const isActive = this.sellItemVerification.isActive();
           const currentStep = this.sellItemVerification.getCurrentStep();
-          const collectedData = this.sellItemVerification.getCollectedData();
           const statusData = [
             {
               label: "Status",
@@ -2975,9 +2952,6 @@ var RollMoney = (() => {
             statCard.appendChild(label);
             statusGrid.appendChild(statCard);
           });
-          if (dataDisplay && Object.keys(collectedData).length > 0) {
-            dataDisplay.textContent = JSON.stringify(collectedData, null, 2);
-          }
           if (logDisplay) {
             const logs = this.sellItemVerification.getTradeLog();
             const recentLogs = logs.slice(-10);
