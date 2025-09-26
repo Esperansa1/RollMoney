@@ -3,6 +3,7 @@ import { UIComponents } from './components/ui-components.js';
 import { DataScraper } from './scrapers/data-scraper.js';
 import { ItemFilter } from './filters/item-filter.js';
 import { WithdrawalAutomation } from './automation/withdrawal-automation.js';
+import { Theme } from './theme/theme.js';
 
 export class MarketItemScraper {
     constructor() {
@@ -60,7 +61,8 @@ export class MarketItemScraper {
             this.itemFilter.setCustomFilterConfig(config);
         });
 
-        this.resultsArea = UIComponents.createResultsArea();
+        const resultsSection = UIComponents.createResultsArea();
+        this.resultsArea = resultsSection.textarea;
 
         const controlButtons = UIComponents.createControlButtons({
             onScrape: () => this.handleScrapeItems(),
@@ -83,6 +85,7 @@ export class MarketItemScraper {
         this.appendComponentsToOverlay({
             dragHandle,
             jsonConfig,
+            resultsSection,
             controlButtons,
             autoWithdrawButtons,
             testButton,
@@ -90,23 +93,60 @@ export class MarketItemScraper {
         });
     }
 
-    appendComponentsToOverlay({ dragHandle, jsonConfig, controlButtons, autoWithdrawButtons, testButton, autoClearControls }) {
+    appendComponentsToOverlay({ dragHandle, jsonConfig, resultsSection, controlButtons, autoWithdrawButtons, testButton, autoClearControls }) {
         this.overlay.insertBefore(dragHandle, this.overlay.firstChild);
+
+        // Create section dividers for better organization
+        const createSectionDivider = () => {
+            return DOMUtils.createElement('div', {
+                height: '1px',
+                backgroundColor: Theme.colors.border,
+                margin: `${Theme.spacing.md} 0`,
+                width: '100%'
+            });
+        };
+
+        const buttonGroup = DOMUtils.createElement('div', {
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: Theme.spacing.sm,
+            marginBottom: Theme.spacing.md
+        });
+
+        [controlButtons.scrapeButton, controlButtons.copyButton, controlButtons.clearButton].forEach(btn => {
+            buttonGroup.appendChild(btn);
+        });
+
+        const automationGroup = DOMUtils.createElement('div', {
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: Theme.spacing.sm,
+            marginBottom: Theme.spacing.md
+        });
+
+        [autoWithdrawButtons.startButton, autoWithdrawButtons.stopButton, testButton].forEach(btn => {
+            automationGroup.appendChild(btn);
+        });
+
+        const closeButtonContainer = DOMUtils.createElement('div', {
+            display: 'flex',
+            justifyContent: 'flex-end',
+            marginTop: Theme.spacing.md
+        });
+        closeButtonContainer.appendChild(controlButtons.closeButton);
 
         [
             jsonConfig.label,
             jsonConfig.textarea,
             jsonConfig.loadButton,
-            this.resultsArea,
-            controlButtons.scrapeButton,
-            controlButtons.copyButton,
-            controlButtons.clearButton,
-            controlButtons.closeButton,
-            document.createElement('br'),
-            autoWithdrawButtons.startButton,
-            autoWithdrawButtons.stopButton,
-            testButton,
-            autoClearControls
+            createSectionDivider(),
+            resultsSection.label,
+            resultsSection.textarea,
+            createSectionDivider(),
+            buttonGroup,
+            automationGroup,
+            autoClearControls,
+            closeButtonContainer
         ].forEach(component => {
             this.overlay.appendChild(component);
         });
@@ -121,7 +161,7 @@ export class MarketItemScraper {
     handleCopyResults() {
         this.resultsArea.select();
         document.execCommand('copy');
-        alert('Results copied to clipboard!');
+        UIComponents.showNotification('📋 Results copied to clipboard!', 'success');
     }
 
     handleClearProcessed() {

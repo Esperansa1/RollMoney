@@ -14,13 +14,50 @@ var RollMoney = (() => {
       DOMUtils = class {
         static createElement(tag, styles = {}, attributes = {}) {
           const element = document.createElement(tag);
-          Object.entries(styles).forEach(([key, value]) => {
-            element.style[key] = value;
-          });
+          this.applyStyles(element, styles);
           Object.entries(attributes).forEach(([key, value]) => {
             element.setAttribute(key, value);
           });
           return element;
+        }
+        static applyStyles(element, styles) {
+          Object.entries(styles).forEach(([key, value]) => {
+            if (key === "hover" && typeof value === "object") {
+              this.addHoverEffect(element, value);
+            } else if (key === "focus" && typeof value === "object") {
+              this.addFocusEffect(element, value);
+            } else {
+              element.style[key] = value;
+            }
+          });
+        }
+        static addHoverEffect(element, hoverStyles) {
+          const originalStyles = {};
+          element.addEventListener("mouseenter", () => {
+            Object.entries(hoverStyles).forEach(([key, value]) => {
+              originalStyles[key] = element.style[key];
+              element.style[key] = value;
+            });
+          });
+          element.addEventListener("mouseleave", () => {
+            Object.entries(originalStyles).forEach(([key, value]) => {
+              element.style[key] = value;
+            });
+          });
+        }
+        static addFocusEffect(element, focusStyles) {
+          const originalStyles = {};
+          element.addEventListener("focus", () => {
+            Object.entries(focusStyles).forEach(([key, value]) => {
+              originalStyles[key] = element.style[key];
+              element.style[key] = value;
+            });
+          });
+          element.addEventListener("blur", () => {
+            Object.entries(originalStyles).forEach(([key, value]) => {
+              element.style[key] = value;
+            });
+          });
         }
         static safeQuerySelector(parent, selector) {
           const element = parent.querySelector(selector);
@@ -80,24 +117,197 @@ var RollMoney = (() => {
     }
   });
 
+  // src/theme/theme.js
+  var Theme, getButtonStyles, getInputStyles, getOverlayStyles;
+  var init_theme = __esm({
+    "src/theme/theme.js"() {
+      Theme = {
+        colors: {
+          primary: "#ff0000",
+          secondary: "#ffffff",
+          background: "#f8f9fa",
+          surface: "#ffffff",
+          surfaceVariant: "#f1f3f4",
+          onPrimary: "#ffffff",
+          onSecondary: "#000000",
+          onBackground: "#1a1a1a",
+          onSurface: "#1a1a1a",
+          border: "#e0e0e0",
+          shadow: "rgba(0, 0, 0, 0.1)",
+          hover: "#f5f5f5",
+          success: "#28a745",
+          warning: "#ffc107",
+          error: "#dc3545",
+          info: "#17a2b8"
+        },
+        spacing: {
+          xs: "4px",
+          sm: "8px",
+          md: "16px",
+          lg: "24px",
+          xl: "32px",
+          xxl: "48px"
+        },
+        borderRadius: {
+          sm: "4px",
+          md: "8px",
+          lg: "12px",
+          xl: "16px",
+          round: "50%"
+        },
+        shadows: {
+          sm: "0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24)",
+          md: "0 3px 6px rgba(0, 0, 0, 0.16), 0 3px 6px rgba(0, 0, 0, 0.23)",
+          lg: "0 10px 20px rgba(0, 0, 0, 0.19), 0 6px 6px rgba(0, 0, 0, 0.23)",
+          xl: "0 14px 28px rgba(0, 0, 0, 0.25), 0 10px 10px rgba(0, 0, 0, 0.22)"
+        },
+        typography: {
+          fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+          fontSize: {
+            xs: "12px",
+            sm: "14px",
+            base: "16px",
+            lg: "18px",
+            xl: "20px",
+            xxl: "24px"
+          },
+          fontWeight: {
+            normal: "400",
+            medium: "500",
+            semibold: "600",
+            bold: "700"
+          },
+          lineHeight: {
+            tight: "1.25",
+            normal: "1.5",
+            relaxed: "1.75"
+          }
+        },
+        animation: {
+          duration: {
+            fast: "150ms",
+            normal: "250ms",
+            slow: "400ms"
+          },
+          easing: {
+            ease: "ease",
+            easeIn: "ease-in",
+            easeOut: "ease-out",
+            easeInOut: "ease-in-out"
+          }
+        },
+        zIndex: {
+          dropdown: 1e3,
+          modal: 2e3,
+          overlay: 1e4,
+          tooltip: 2e4
+        }
+      };
+      getButtonStyles = (variant = "primary", size = "md") => {
+        const baseStyles = {
+          fontFamily: Theme.typography.fontFamily,
+          fontSize: Theme.typography.fontSize.sm,
+          fontWeight: Theme.typography.fontWeight.medium,
+          lineHeight: Theme.typography.lineHeight.normal,
+          borderRadius: Theme.borderRadius.md,
+          border: "none",
+          cursor: "pointer",
+          transition: `all ${Theme.animation.duration.normal} ${Theme.animation.easing.easeInOut}`,
+          outline: "none",
+          userSelect: "none",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          textDecoration: "none",
+          whiteSpace: "nowrap"
+        };
+        const sizeStyles = {
+          sm: {
+            padding: `${Theme.spacing.xs} ${Theme.spacing.sm}`,
+            fontSize: Theme.typography.fontSize.xs
+          },
+          md: {
+            padding: `${Theme.spacing.sm} ${Theme.spacing.md}`,
+            fontSize: Theme.typography.fontSize.sm
+          },
+          lg: {
+            padding: `${Theme.spacing.md} ${Theme.spacing.lg}`,
+            fontSize: Theme.typography.fontSize.base
+          }
+        };
+        const variantStyles = {
+          primary: {
+            backgroundColor: Theme.colors.primary,
+            color: Theme.colors.onPrimary,
+            boxShadow: Theme.shadows.sm
+          },
+          secondary: {
+            backgroundColor: Theme.colors.secondary,
+            color: Theme.colors.onSecondary,
+            border: `1px solid ${Theme.colors.border}`,
+            boxShadow: Theme.shadows.sm
+          },
+          success: {
+            backgroundColor: Theme.colors.success,
+            color: Theme.colors.onPrimary
+          },
+          warning: {
+            backgroundColor: Theme.colors.warning,
+            color: Theme.colors.onSecondary
+          },
+          error: {
+            backgroundColor: Theme.colors.error,
+            color: Theme.colors.onPrimary
+          }
+        };
+        return {
+          ...baseStyles,
+          ...sizeStyles[size],
+          ...variantStyles[variant]
+        };
+      };
+      getInputStyles = () => ({
+        fontFamily: Theme.typography.fontFamily,
+        fontSize: Theme.typography.fontSize.sm,
+        lineHeight: Theme.typography.lineHeight.normal,
+        padding: `${Theme.spacing.sm} ${Theme.spacing.md}`,
+        border: `1px solid ${Theme.colors.border}`,
+        borderRadius: Theme.borderRadius.md,
+        backgroundColor: Theme.colors.surface,
+        color: Theme.colors.onSurface,
+        outline: "none",
+        transition: `border-color ${Theme.animation.duration.normal} ${Theme.animation.easing.easeInOut}`,
+        width: "100%",
+        boxSizing: "border-box"
+      });
+      getOverlayStyles = () => ({
+        position: "fixed",
+        backgroundColor: Theme.colors.surface,
+        border: `2px solid ${Theme.colors.primary}`,
+        borderRadius: Theme.borderRadius.xl,
+        padding: Theme.spacing.lg,
+        zIndex: Theme.zIndex.overlay,
+        boxShadow: Theme.shadows.xl,
+        fontFamily: Theme.typography.fontFamily,
+        color: Theme.colors.onSurface,
+        minWidth: "350px",
+        maxWidth: "500px"
+      });
+    }
+  });
+
   // src/components/ui-components.js
   var UIComponents;
   var init_ui_components = __esm({
     "src/components/ui-components.js"() {
       init_dom_utils();
+      init_theme();
       UIComponents = class {
         static createOverlay() {
           return DOMUtils.createElement("div", {
-            position: "fixed",
+            ...getOverlayStyles(),
             top: "20px",
             right: "20px",
-            backgroundColor: "white",
-            border: "2px solid #333",
-            borderRadius: "10px",
-            padding: "15px",
-            zIndex: "10000",
-            width: "350px",
-            boxShadow: "0 4px 6px rgba(0,0,0,0.1)",
             cursor: "move"
           }, {
             id: "market-scraper-overlay"
@@ -105,17 +315,25 @@ var RollMoney = (() => {
         }
         static createDragHandle(overlay, callbacks = {}) {
           const dragHandle = DOMUtils.createElement("div", {
-            backgroundColor: "#f1f1f1",
-            color: "#333",
-            padding: "5px",
-            borderTopLeftRadius: "10px",
-            borderTopRightRadius: "10px",
-            margin: "-15px -15px 15px -15px",
+            backgroundColor: Theme.colors.primary,
+            color: Theme.colors.onPrimary,
+            padding: Theme.spacing.md,
+            borderTopLeftRadius: Theme.borderRadius.xl,
+            borderTopRightRadius: Theme.borderRadius.xl,
+            margin: `-${Theme.spacing.lg} -${Theme.spacing.lg} ${Theme.spacing.lg} -${Theme.spacing.lg}`,
             textAlign: "center",
-            fontWeight: "bold",
-            userSelect: "none"
+            fontWeight: Theme.typography.fontWeight.bold,
+            fontSize: Theme.typography.fontSize.base,
+            fontFamily: Theme.typography.fontFamily,
+            userSelect: "none",
+            cursor: "grab",
+            boxShadow: Theme.shadows.sm,
+            hover: {
+              backgroundColor: "#cc0000",
+              cursor: "grabbing"
+            }
           });
-          dragHandle.textContent = "Market Scraper";
+          dragHandle.textContent = "\u{1F525} Money Maker";
           let isDragging = false;
           let currentX, currentY, initialX, initialY;
           let xOffset = 0;
@@ -161,16 +379,17 @@ var RollMoney = (() => {
           }
           return dragHandle;
         }
-        static createButton(text, styles = {}, onClick = null) {
-          const defaultStyles = {
-            marginRight: "10px",
-            padding: "5px 10px",
-            cursor: "pointer"
+        static createButton(text, variant = "primary", size = "md", onClick = null) {
+          const buttonStyles = {
+            ...getButtonStyles(variant, size),
+            marginRight: Theme.spacing.sm,
+            hover: {
+              transform: "translateY(-1px)",
+              boxShadow: Theme.shadows.md,
+              backgroundColor: variant === "primary" ? "#cc0000" : Theme.colors.hover
+            }
           };
-          const button = DOMUtils.createElement(
-            "button",
-            { ...defaultStyles, ...styles }
-          );
+          const button = DOMUtils.createElement("button", buttonStyles);
           button.textContent = text;
           if (onClick) {
             button.addEventListener("click", onClick);
@@ -178,102 +397,171 @@ var RollMoney = (() => {
           return button;
         }
         static createTextarea(styles = {}, attributes = {}) {
-          const defaultStyles = {
-            width: "100%",
-            marginBottom: "10px",
-            resize: "vertical"
+          const textareaStyles = {
+            ...getInputStyles(),
+            marginBottom: Theme.spacing.md,
+            resize: "vertical",
+            minHeight: "100px",
+            focus: {
+              borderColor: Theme.colors.primary,
+              boxShadow: `0 0 0 2px ${Theme.colors.primary}20`
+            },
+            ...styles
           };
-          return DOMUtils.createElement(
-            "textarea",
-            { ...defaultStyles, ...styles },
-            attributes
-          );
+          return DOMUtils.createElement("textarea", textareaStyles, attributes);
         }
         static createLabel(text, styles = {}) {
-          const defaultStyles = {
+          const labelStyles = {
             display: "block",
-            marginBottom: "10px"
+            marginBottom: Theme.spacing.sm,
+            fontFamily: Theme.typography.fontFamily,
+            fontSize: Theme.typography.fontSize.sm,
+            fontWeight: Theme.typography.fontWeight.medium,
+            color: Theme.colors.onSurface,
+            ...styles
           };
-          const label = DOMUtils.createElement(
-            "label",
-            { ...defaultStyles, ...styles }
-          );
+          const label = DOMUtils.createElement("label", labelStyles);
           label.textContent = text;
           return label;
         }
         static createInput(type = "text", styles = {}, attributes = {}) {
-          return DOMUtils.createElement("input", styles, {
+          const inputStyles = {
+            ...getInputStyles(),
+            focus: {
+              borderColor: Theme.colors.primary,
+              boxShadow: `0 0 0 2px ${Theme.colors.primary}20`
+            },
+            ...styles
+          };
+          return DOMUtils.createElement("input", inputStyles, {
             type,
             ...attributes
           });
         }
         static createJsonConfigSection(onLoad) {
-          const label = this.createLabel("Custom Filter JSON:");
+          const label = this.createLabel("\u{1F3AF} Custom Filter Configuration");
           const textarea = this.createTextarea(
             { height: "150px" },
             {
               id: "custom-filter-json",
-              placeholder: `Enter JSON like:
+              placeholder: `Enter JSON configuration:
 [
   {"skin": "Bayonet", "type": ["Fade", "Marble Fade"]},
   {"type": "Bowie Knife", "skin": ["Fade", "Marble Fade"]}
 ]`
             }
           );
-          const loadButton = this.createButton("Load Filter", {}, () => {
+          const loadButton = this.createButton("\u{1F504} Load Filter", "primary", "sm", () => {
             try {
               const jsonInput = textarea.value.trim();
               const config = jsonInput ? JSON.parse(jsonInput) : [];
               if (onLoad) onLoad(config);
-              alert("Filter configuration loaded!");
+              this.showNotification("\u2705 Filter configuration loaded!", "success");
             } catch (error) {
-              alert("Invalid JSON: " + error.message);
+              this.showNotification("\u274C Invalid JSON: " + error.message, "error");
             }
           });
           return { label, textarea, loadButton };
         }
         static createResultsArea() {
-          return this.createTextarea(
+          const label = this.createLabel("\u{1F4CA} Scraping Results");
+          const textarea = this.createTextarea(
             { height: "200px" },
-            { id: "market-scraper-results" }
+            {
+              id: "market-scraper-results",
+              placeholder: "Results will appear here after scraping..."
+            }
           );
+          return { label, textarea };
         }
         static createControlButtons(callbacks = {}) {
-          const scrapeButton = this.createButton("Scrape Items", {}, callbacks.onScrape);
-          const copyButton = this.createButton("Copy Results", {}, callbacks.onCopy);
-          const clearButton = this.createButton("Clear Processed", {}, callbacks.onClear);
-          const closeButton = this.createButton("Close", { float: "right" }, callbacks.onClose);
+          const scrapeButton = this.createButton("\u{1F50D} Scrape Items", "primary", "md", callbacks.onScrape);
+          const copyButton = this.createButton("\u{1F4CB} Copy Results", "secondary", "md", callbacks.onCopy);
+          const clearButton = this.createButton("\u{1F5D1}\uFE0F Clear Processed", "secondary", "md", callbacks.onClear);
+          const closeButton = this.createButton("\u274C Close", "error", "sm", callbacks.onClose);
           return { scrapeButton, copyButton, clearButton, closeButton };
         }
         static createAutoWithdrawButtons(callbacks = {}) {
-          const startButton = this.createButton("Start Auto-Withdraw", {}, callbacks.onStart);
-          const stopButton = this.createButton("Stop Auto-Withdraw", {}, callbacks.onStop);
+          const startButton = this.createButton("\u25B6\uFE0F Start Auto-Withdraw", "success", "md", callbacks.onStart);
+          const stopButton = this.createButton("\u23F9\uFE0F Stop Auto-Withdraw", "error", "md", callbacks.onStop);
           return { startButton, stopButton };
         }
         static createTestRefreshButton(onTest) {
-          return this.createButton("Test Refresh", {
-            backgroundColor: "#ffcc00",
-            fontWeight: "bold"
-          }, onTest);
+          return this.createButton("\u{1F9EA} Test Refresh", "warning", "sm", onTest);
         }
         static createAutoClearControls() {
+          const label = this.createLabel("\u23F0 Auto-clear interval:", {
+            fontSize: Theme.typography.fontSize.xs,
+            marginBottom: Theme.spacing.xs
+          });
           const input = this.createInput("number", {
-            width: "50px",
-            marginRight: "5px"
+            width: "80px",
+            marginRight: Theme.spacing.sm,
+            textAlign: "center"
           }, {
             min: "1",
             max: "60",
             value: "5"
           });
-          const label = this.createLabel("Auto-clear (seconds):", {
-            fontSize: "12px"
+          const unitLabel = DOMUtils.createElement("span", {
+            fontSize: Theme.typography.fontSize.xs,
+            color: Theme.colors.onSurface,
+            fontFamily: Theme.typography.fontFamily
           });
+          unitLabel.textContent = "seconds";
           const container = DOMUtils.createElement("div", {
-            marginTop: "10px"
+            marginTop: Theme.spacing.md,
+            padding: Theme.spacing.sm,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.md,
+            display: "flex",
+            alignItems: "center",
+            gap: Theme.spacing.sm
           });
           container.appendChild(label);
           container.appendChild(input);
+          container.appendChild(unitLabel);
           return container;
+        }
+        static showNotification(message, type = "info") {
+          const colors = {
+            success: Theme.colors.success,
+            error: Theme.colors.error,
+            warning: Theme.colors.warning,
+            info: Theme.colors.info
+          };
+          const notification = DOMUtils.createElement("div", {
+            position: "fixed",
+            top: "20px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            backgroundColor: colors[type] || Theme.colors.info,
+            color: Theme.colors.onPrimary,
+            padding: `${Theme.spacing.sm} ${Theme.spacing.lg}`,
+            borderRadius: Theme.borderRadius.md,
+            zIndex: Theme.zIndex.tooltip,
+            fontFamily: Theme.typography.fontFamily,
+            fontSize: Theme.typography.fontSize.sm,
+            fontWeight: Theme.typography.fontWeight.medium,
+            boxShadow: Theme.shadows.lg,
+            opacity: "0",
+            transition: `all ${Theme.animation.duration.normal} ${Theme.animation.easing.easeOut}`
+          });
+          notification.textContent = message;
+          document.body.appendChild(notification);
+          requestAnimationFrame(() => {
+            notification.style.opacity = "1";
+            notification.style.transform = "translateX(-50%) translateY(10px)";
+          });
+          setTimeout(() => {
+            notification.style.opacity = "0";
+            notification.style.transform = "translateX(-50%) translateY(-10px)";
+            setTimeout(() => {
+              if (notification.parentNode) {
+                notification.parentNode.removeChild(notification);
+              }
+            }, 300);
+          }, 3e3);
         }
       };
     }
@@ -649,6 +937,7 @@ var RollMoney = (() => {
       init_data_scraper();
       init_item_filter();
       init_withdrawal_automation();
+      init_theme();
       MarketItemScraper = class {
         constructor() {
           this.isScraperActive = false;
@@ -696,7 +985,8 @@ var RollMoney = (() => {
           const jsonConfig = UIComponents.createJsonConfigSection((config) => {
             this.itemFilter.setCustomFilterConfig(config);
           });
-          this.resultsArea = UIComponents.createResultsArea();
+          const resultsSection = UIComponents.createResultsArea();
+          this.resultsArea = resultsSection.textarea;
           const controlButtons = UIComponents.createControlButtons({
             onScrape: () => this.handleScrapeItems(),
             onCopy: () => this.handleCopyResults(),
@@ -714,28 +1004,59 @@ var RollMoney = (() => {
           this.appendComponentsToOverlay({
             dragHandle,
             jsonConfig,
+            resultsSection,
             controlButtons,
             autoWithdrawButtons,
             testButton,
             autoClearControls
           });
         }
-        appendComponentsToOverlay({ dragHandle, jsonConfig, controlButtons, autoWithdrawButtons, testButton, autoClearControls }) {
+        appendComponentsToOverlay({ dragHandle, jsonConfig, resultsSection, controlButtons, autoWithdrawButtons, testButton, autoClearControls }) {
           this.overlay.insertBefore(dragHandle, this.overlay.firstChild);
+          const createSectionDivider = () => {
+            return DOMUtils.createElement("div", {
+              height: "1px",
+              backgroundColor: Theme.colors.border,
+              margin: `${Theme.spacing.md} 0`,
+              width: "100%"
+            });
+          };
+          const buttonGroup = DOMUtils.createElement("div", {
+            display: "flex",
+            flexWrap: "wrap",
+            gap: Theme.spacing.sm,
+            marginBottom: Theme.spacing.md
+          });
+          [controlButtons.scrapeButton, controlButtons.copyButton, controlButtons.clearButton].forEach((btn) => {
+            buttonGroup.appendChild(btn);
+          });
+          const automationGroup = DOMUtils.createElement("div", {
+            display: "flex",
+            flexWrap: "wrap",
+            gap: Theme.spacing.sm,
+            marginBottom: Theme.spacing.md
+          });
+          [autoWithdrawButtons.startButton, autoWithdrawButtons.stopButton, testButton].forEach((btn) => {
+            automationGroup.appendChild(btn);
+          });
+          const closeButtonContainer = DOMUtils.createElement("div", {
+            display: "flex",
+            justifyContent: "flex-end",
+            marginTop: Theme.spacing.md
+          });
+          closeButtonContainer.appendChild(controlButtons.closeButton);
           [
             jsonConfig.label,
             jsonConfig.textarea,
             jsonConfig.loadButton,
-            this.resultsArea,
-            controlButtons.scrapeButton,
-            controlButtons.copyButton,
-            controlButtons.clearButton,
-            controlButtons.closeButton,
-            document.createElement("br"),
-            autoWithdrawButtons.startButton,
-            autoWithdrawButtons.stopButton,
-            testButton,
-            autoClearControls
+            createSectionDivider(),
+            resultsSection.label,
+            resultsSection.textarea,
+            createSectionDivider(),
+            buttonGroup,
+            automationGroup,
+            autoClearControls,
+            closeButtonContainer
           ].forEach((component) => {
             this.overlay.appendChild(component);
           });
@@ -748,7 +1069,7 @@ var RollMoney = (() => {
         handleCopyResults() {
           this.resultsArea.select();
           document.execCommand("copy");
-          alert("Results copied to clipboard!");
+          UIComponents.showNotification("\u{1F4CB} Results copied to clipboard!", "success");
         }
         handleClearProcessed() {
           const count = this.dataScraper.clearProcessedItems();
