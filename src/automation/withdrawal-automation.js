@@ -8,6 +8,38 @@ export class WithdrawalAutomation {
         this.autoClearInterval = null;
         this.scanInterval = null;
         this.isRunning = false;
+
+        // Automation manager integration
+        this.id = 'withdrawal-automation';
+        this.priority = 1;
+        this.interval = 500;
+        this.settings = {
+            scanInterval: 500,
+            autoClearSeconds: 5,
+            enabled: true
+        };
+    }
+
+    // Automation manager lifecycle methods
+    start() {
+        this.startPeriodicScan(this.settings.scanInterval);
+    }
+
+    stop() {
+        this.stopPeriodicScan();
+    }
+
+    pause() {
+        if (this.scanInterval) {
+            clearInterval(this.scanInterval);
+        }
+        this.isRunning = false;
+    }
+
+    resume() {
+        if (!this.isRunning) {
+            this.start();
+        }
     }
 
     startPeriodicScan(intervalMs = 500) {

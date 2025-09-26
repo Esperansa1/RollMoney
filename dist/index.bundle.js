@@ -285,13 +285,16 @@ var RollMoney = (() => {
         backgroundColor: Theme.colors.surface,
         border: `2px solid ${Theme.colors.primary}`,
         borderRadius: Theme.borderRadius.xl,
-        padding: Theme.spacing.lg,
+        padding: Theme.spacing.md,
         zIndex: Theme.zIndex.overlay,
         boxShadow: Theme.shadows.xl,
         fontFamily: Theme.typography.fontFamily,
         color: Theme.colors.onSurface,
-        minWidth: "350px",
-        maxWidth: "500px"
+        width: "900px",
+        height: "auto",
+        maxHeight: "90vh",
+        overflow: "visible",
+        boxSizing: "border-box"
       });
     }
   });
@@ -333,7 +336,37 @@ var RollMoney = (() => {
               cursor: "grabbing"
             }
           });
-          dragHandle.textContent = "\u{1F525} Money Maker";
+          const titleSpan = DOMUtils.createElement("span");
+          titleSpan.textContent = "Money Maker";
+          const closeButton = DOMUtils.createElement("button", {
+            position: "absolute",
+            right: Theme.spacing.sm,
+            top: "50%",
+            transform: "translateY(-50%)",
+            backgroundColor: "transparent",
+            border: "none",
+            color: Theme.colors.onPrimary,
+            fontSize: Theme.typography.fontSize.lg,
+            cursor: "pointer",
+            padding: "0",
+            width: "20px",
+            height: "20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            hover: {
+              backgroundColor: "rgba(255,255,255,0.2)",
+              borderRadius: Theme.borderRadius.sm
+            }
+          });
+          closeButton.textContent = "\xD7";
+          closeButton.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (callbacks.onClose) callbacks.onClose();
+          });
+          dragHandle.style.position = "relative";
+          dragHandle.appendChild(titleSpan);
+          dragHandle.appendChild(closeButton);
           let isDragging = false;
           let currentX, currentY, initialX, initialY;
           let xOffset = 0;
@@ -439,9 +472,13 @@ var RollMoney = (() => {
           });
         }
         static createJsonConfigSection(onLoad) {
-          const label = this.createLabel("\u{1F3AF} Custom Filter Configuration");
+          const label = this.createLabel("Custom Filter Configuration");
           const textarea = this.createTextarea(
-            { height: "150px" },
+            {
+              height: "180px",
+              maxHeight: "180px",
+              overflow: "auto"
+            },
             {
               id: "custom-filter-json",
               placeholder: `Enter JSON configuration:
@@ -451,22 +488,26 @@ var RollMoney = (() => {
 ]`
             }
           );
-          const loadButton = this.createButton("\u{1F504} Load Filter", "primary", "sm", () => {
+          const loadButton = this.createButton("Load Filter", "primary", "sm", () => {
             try {
               const jsonInput = textarea.value.trim();
               const config = jsonInput ? JSON.parse(jsonInput) : [];
               if (onLoad) onLoad(config);
-              this.showNotification("\u2705 Filter configuration loaded!", "success");
+              this.showNotification("Filter configuration loaded!", "success");
             } catch (error) {
-              this.showNotification("\u274C Invalid JSON: " + error.message, "error");
+              this.showNotification("Invalid JSON: " + error.message, "error");
             }
           });
           return { label, textarea, loadButton };
         }
         static createResultsArea() {
-          const label = this.createLabel("\u{1F4CA} Scraping Results");
+          const label = this.createLabel("Scraping Results");
           const textarea = this.createTextarea(
-            { height: "200px" },
+            {
+              height: "250px",
+              maxHeight: "250px",
+              overflow: "auto"
+            },
             {
               id: "market-scraper-results",
               placeholder: "Results will appear here after scraping..."
@@ -475,22 +516,22 @@ var RollMoney = (() => {
           return { label, textarea };
         }
         static createControlButtons(callbacks = {}) {
-          const scrapeButton = this.createButton("\u{1F50D} Scrape Items", "primary", "md", callbacks.onScrape);
-          const copyButton = this.createButton("\u{1F4CB} Copy Results", "secondary", "md", callbacks.onCopy);
-          const clearButton = this.createButton("\u{1F5D1}\uFE0F Clear Processed", "secondary", "md", callbacks.onClear);
-          const closeButton = this.createButton("\u274C Close", "error", "sm", callbacks.onClose);
+          const scrapeButton = this.createButton("Scrape Items", "primary", "md", callbacks.onScrape);
+          const copyButton = this.createButton("Copy Results", "secondary", "md", callbacks.onCopy);
+          const clearButton = this.createButton("Clear Processed", "secondary", "md", callbacks.onClear);
+          const closeButton = this.createButton("Close", "secondary", "sm", callbacks.onClose);
           return { scrapeButton, copyButton, clearButton, closeButton };
         }
         static createAutoWithdrawButtons(callbacks = {}) {
-          const startButton = this.createButton("\u25B6\uFE0F Start Auto-Withdraw", "success", "md", callbacks.onStart);
-          const stopButton = this.createButton("\u23F9\uFE0F Stop Auto-Withdraw", "error", "md", callbacks.onStop);
+          const startButton = this.createButton("Start Auto-Withdraw", "success", "md", callbacks.onStart);
+          const stopButton = this.createButton("Stop Auto-Withdraw", "secondary", "md", callbacks.onStop);
           return { startButton, stopButton };
         }
         static createTestRefreshButton(onTest) {
-          return this.createButton("\u{1F9EA} Test Refresh", "warning", "sm", onTest);
+          return this.createButton("Test Refresh", "secondary", "sm", onTest);
         }
         static createAutoClearControls() {
-          const label = this.createLabel("\u23F0 Auto-clear interval:", {
+          const label = this.createLabel("Auto-clear interval:", {
             fontSize: Theme.typography.fontSize.xs,
             marginBottom: Theme.spacing.xs
           });
@@ -758,6 +799,32 @@ var RollMoney = (() => {
           this.autoClearInterval = null;
           this.scanInterval = null;
           this.isRunning = false;
+          this.id = "withdrawal-automation";
+          this.priority = 1;
+          this.interval = 500;
+          this.settings = {
+            scanInterval: 500,
+            autoClearSeconds: 5,
+            enabled: true
+          };
+        }
+        // Automation manager lifecycle methods
+        start() {
+          this.startPeriodicScan(this.settings.scanInterval);
+        }
+        stop() {
+          this.stopPeriodicScan();
+        }
+        pause() {
+          if (this.scanInterval) {
+            clearInterval(this.scanInterval);
+          }
+          this.isRunning = false;
+        }
+        resume() {
+          if (!this.isRunning) {
+            this.start();
+          }
         }
         startPeriodicScan(intervalMs = 500) {
           if (this.scanInterval) {
@@ -928,6 +995,1513 @@ var RollMoney = (() => {
     }
   });
 
+  // src/automation/market-monitor.js
+  var MarketMonitor;
+  var init_market_monitor = __esm({
+    "src/automation/market-monitor.js"() {
+      MarketMonitor = class {
+        constructor(dataScraper, itemFilter) {
+          this.dataScraper = dataScraper;
+          this.itemFilter = itemFilter;
+          this.monitorInterval = null;
+          this.isRunning = false;
+          this.priceHistory = /* @__PURE__ */ new Map();
+          this.alerts = [];
+          this.id = "market-monitor";
+          this.priority = 2;
+          this.interval = 2e3;
+          this.settings = {
+            priceThreshold: 0.05,
+            // 5% price change threshold
+            trackDuration: 3e5,
+            // 5 minutes of price tracking
+            enabled: true,
+            alertOnDrop: true,
+            alertOnRise: false
+          };
+        }
+        // Automation manager lifecycle methods
+        start() {
+          this.isRunning = true;
+          this.startMonitoring();
+        }
+        stop() {
+          this.isRunning = false;
+          this.stopMonitoring();
+        }
+        pause() {
+          this.isRunning = false;
+          if (this.monitorInterval) {
+            clearInterval(this.monitorInterval);
+            this.monitorInterval = null;
+          }
+        }
+        resume() {
+          if (!this.isRunning) {
+            this.start();
+          }
+        }
+        startMonitoring() {
+          if (this.monitorInterval) {
+            this.stopMonitoring();
+          }
+          this.monitorInterval = setInterval(() => {
+            this.monitorMarket();
+          }, this.interval);
+          console.log("Market monitoring started");
+        }
+        stopMonitoring() {
+          if (this.monitorInterval) {
+            clearInterval(this.monitorInterval);
+            this.monitorInterval = null;
+          }
+          console.log("Market monitoring stopped");
+        }
+        monitorMarket() {
+          try {
+            const items = this.dataScraper.scrapeMarketItems();
+            const filteredItems = this.itemFilter.filterItems(items);
+            filteredItems.forEach((item) => {
+              this.trackItemPrice(item);
+            });
+            this.cleanOldPriceData();
+          } catch (error) {
+            console.error("Error monitoring market:", error);
+          }
+        }
+        trackItemPrice(item) {
+          const itemKey = `${item.name}_${item.condition}`;
+          const currentTime = Date.now();
+          const price = this.parsePrice(item.price);
+          if (!this.priceHistory.has(itemKey)) {
+            this.priceHistory.set(itemKey, []);
+          }
+          const history = this.priceHistory.get(itemKey);
+          history.push({
+            price,
+            timestamp: currentTime,
+            percentageChange: item.percentageChange
+          });
+          const cutoffTime = currentTime - this.settings.trackDuration;
+          const recentHistory = history.filter((entry) => entry.timestamp > cutoffTime);
+          this.priceHistory.set(itemKey, recentHistory);
+          if (recentHistory.length > 1) {
+            this.checkPriceAlerts(item, recentHistory);
+          }
+        }
+        checkPriceAlerts(item, history) {
+          if (history.length < 2) return;
+          const latest = history[history.length - 1];
+          const oldest = history[0];
+          const priceChange = (latest.price - oldest.price) / oldest.price;
+          if (Math.abs(priceChange) >= this.settings.priceThreshold) {
+            const isIncrease = priceChange > 0;
+            if (isIncrease && this.settings.alertOnRise || !isIncrease && this.settings.alertOnDrop) {
+              this.createAlert({
+                type: isIncrease ? "price_increase" : "price_drop",
+                item,
+                priceChange,
+                timestamp: Date.now()
+              });
+            }
+          }
+        }
+        createAlert(alert) {
+          this.alerts.push(alert);
+          if (this.alerts.length > 50) {
+            this.alerts = this.alerts.slice(-50);
+          }
+          const changeType = alert.type === "price_increase" ? "increased" : "dropped";
+          const percentage = (Math.abs(alert.priceChange) * 100).toFixed(1);
+          console.log(`ALERT: ${alert.item.name} price ${changeType} by ${percentage}%`);
+          if (window.MarketItemScraper && window.MarketItemScraper.automationManager) {
+            window.MarketItemScraper.automationManager.emit("price-alert", alert);
+          }
+        }
+        parsePrice(priceString) {
+          const cleanPrice = priceString.replace(/[^0-9.,]/g, "");
+          return parseFloat(cleanPrice.replace(",", ".")) || 0;
+        }
+        cleanOldPriceData() {
+          const cutoffTime = Date.now() - this.settings.trackDuration;
+          for (const [itemKey, history] of this.priceHistory.entries()) {
+            const recentHistory = history.filter((entry) => entry.timestamp > cutoffTime);
+            if (recentHistory.length === 0) {
+              this.priceHistory.delete(itemKey);
+            } else {
+              this.priceHistory.set(itemKey, recentHistory);
+            }
+          }
+        }
+        getPriceHistory(itemName, condition) {
+          const itemKey = `${itemName}_${condition}`;
+          return this.priceHistory.get(itemKey) || [];
+        }
+        getRecentAlerts(limit = 10) {
+          return this.alerts.slice(-limit);
+        }
+        getMonitoredItemsCount() {
+          return this.priceHistory.size;
+        }
+        getStats() {
+          return {
+            monitoredItems: this.priceHistory.size,
+            totalAlerts: this.alerts.length,
+            isRunning: this.isRunning,
+            settings: this.settings
+          };
+        }
+      };
+    }
+  });
+
+  // src/automation/sell-item-verification.js
+  var SellItemVerification;
+  var init_sell_item_verification = __esm({
+    "src/automation/sell-item-verification.js"() {
+      init_dom_utils();
+      SellItemVerification = class {
+        constructor() {
+          this.isRunning = false;
+          this.currentStep = "idle";
+          this.collectedData = {};
+          this.tradeLog = [];
+          this.stepTimeouts = /* @__PURE__ */ new Map();
+          this.id = "sell-item-verification";
+          this.priority = 2;
+          this.interval = 1e3;
+          this.settings = {
+            enabled: true,
+            maxWaitTime: 3e4,
+            // 30 seconds max wait per step
+            stepCheckInterval: 500,
+            // Check every 500ms
+            logTradeData: true
+          };
+        }
+        // Automation manager lifecycle methods
+        start() {
+          this.isRunning = true;
+          this.currentStep = "waiting_for_trade_popup";
+          this.startStepMonitoring();
+          console.log("SellItemVerification automation started");
+        }
+        stop() {
+          this.isRunning = false;
+          this.currentStep = "idle";
+          this.clearAllTimeouts();
+          console.log("SellItemVerification automation stopped");
+        }
+        pause() {
+          this.isRunning = false;
+          this.clearAllTimeouts();
+        }
+        resume() {
+          this.isRunning = true;
+          this.startStepMonitoring();
+        }
+        // Main monitoring loop
+        startStepMonitoring() {
+          if (!this.isRunning) return;
+          const monitor = () => {
+            if (!this.isRunning) return;
+            try {
+              this.executeCurrentStep();
+            } catch (error) {
+              console.error(`Error in step ${this.currentStep}:`, error);
+              this.logError(error);
+            }
+            setTimeout(monitor, this.settings.stepCheckInterval);
+          };
+          monitor();
+        }
+        executeCurrentStep() {
+          switch (this.currentStep) {
+            case "waiting_for_trade_popup":
+              this.step1_WaitForTradePopup();
+              break;
+            case "accept_trade_setup":
+              this.step1_AcceptTradeSetup();
+              break;
+            case "wait_for_continue":
+              this.step1_WaitForContinue();
+              break;
+            case "extract_item_data":
+              this.step2_ExtractItemData();
+              break;
+            case "send_items":
+              this.step2_SendItems();
+              break;
+            case "navigate_inventory":
+              this.step3_NavigateInventory();
+              break;
+            case "select_item":
+              this.step3_SelectItem();
+              break;
+            case "confirm_trade":
+              this.step4_ConfirmTrade();
+              break;
+            case "complete":
+              this.completeVerification();
+              break;
+          }
+        }
+        // Step 1: Accept Trade Setup
+        step1_WaitForTradePopup() {
+          const readyButton = this.findButtonByText("Yes, I'm ready");
+          if (readyButton) {
+            console.log(`Found "Yes, I'm ready" button`);
+            readyButton.click();
+            this.currentStep = "wait_for_continue";
+            this.logStep(`Clicked "Yes, I'm ready" button`);
+          }
+        }
+        step1_AcceptTradeSetup() {
+          const readyButton = this.findButtonByText("Yes, I'm ready");
+          if (readyButton) {
+            readyButton.click();
+            this.currentStep = "wait_for_continue";
+            this.logStep(`Clicked "Yes, I'm ready" button`);
+          }
+        }
+        step1_WaitForContinue() {
+          const continueButton = this.findButtonByText("Continue");
+          if (continueButton) {
+            console.log('Found "Continue" button');
+            continueButton.click();
+            this.currentStep = "extract_item_data";
+            this.logStep('Clicked "Continue" button');
+          }
+        }
+        // Step 2: Item Dialog Extraction
+        step2_ExtractItemData() {
+          const modal = document.querySelector("mat-dialog-container");
+          if (!modal) return;
+          try {
+            const categoryElement = modal.querySelector('span[data-test="item-subcategory"]');
+            const itemCategory = categoryElement ? categoryElement.textContent.trim() : "Unknown";
+            const labelElement = modal.querySelector("label[title]");
+            const itemName = labelElement ? labelElement.getAttribute("title") : "Unknown";
+            const valueElement = modal.querySelector("span.currency-value");
+            const itemValue = valueElement ? valueElement.textContent.trim() : "Unknown";
+            const pageText = modal.textContent || "";
+            const pageMatch = pageText.match(/On page (\d+) of your Steam inventory/i);
+            const inventoryPage = pageMatch ? parseInt(pageMatch[1]) : 1;
+            const itemPosition = this.calculateItemPosition(modal);
+            this.collectedData = {
+              itemName,
+              itemCategory,
+              itemValue,
+              inventoryPage,
+              itemPosition,
+              timestamp: (/* @__PURE__ */ new Date()).toISOString()
+            };
+            console.log("Extracted item data:", this.collectedData);
+            this.logStep("Extracted item data", this.collectedData);
+            this.currentStep = "send_items";
+          } catch (error) {
+            console.error("Error extracting item data:", error);
+            this.logError(error);
+          }
+        }
+        calculateItemPosition(modal) {
+          try {
+            const gridItems = modal.querySelectorAll('[class*="item"], [class*="grid"], .inventory-item');
+            if (gridItems.length === 0) return 1;
+            const selectedItem = modal.querySelector('.selected, .highlight, .active, [class*="selected"]');
+            if (selectedItem) {
+              const itemIndex = Array.from(gridItems).indexOf(selectedItem);
+              return itemIndex >= 0 ? itemIndex + 1 : 1;
+            }
+            return 1;
+          } catch (error) {
+            console.error("Error calculating item position:", error);
+            return 1;
+          }
+        }
+        step2_SendItems() {
+          const sendButton = this.findButtonByText("Send Items Now");
+          if (sendButton) {
+            console.log('Found "Send Items Now" button');
+            sendButton.click();
+            this.currentStep = "navigate_inventory";
+            this.logStep('Clicked "Send Items Now" button');
+          }
+        }
+        // Step 3: Steam Inventory Navigation
+        step3_NavigateInventory() {
+          const pageControlCur = document.querySelector("#pagecontrol_cur");
+          if (pageControlCur) {
+            const currentPage = parseInt(pageControlCur.textContent) || 1;
+            const targetPage = this.collectedData.inventoryPage || 1;
+            if (currentPage !== targetPage) {
+              this.navigateToPage(currentPage, targetPage);
+            } else {
+              console.log(`Already on correct page ${targetPage}`);
+              this.currentStep = "select_item";
+              this.logStep(`Navigated to inventory page ${targetPage}`);
+            }
+          }
+        }
+        navigateToPage(currentPage, targetPage) {
+          if (currentPage < targetPage) {
+            const nextButton = document.querySelector("#pagebtn_next");
+            if (nextButton && !nextButton.disabled) {
+              nextButton.click();
+              this.logStep(`Clicked next page button (${currentPage} -> ${targetPage})`);
+            }
+          } else if (currentPage > targetPage) {
+            const prevButton = document.querySelector("#pagebtn_previous");
+            if (prevButton && !prevButton.disabled) {
+              prevButton.click();
+              this.logStep(`Clicked previous page button (${currentPage} -> ${targetPage})`);
+            }
+          }
+        }
+        step3_SelectItem() {
+          const inventoryItems = document.querySelectorAll('[id^="item730_"]');
+          if (inventoryItems.length === 0) {
+            console.log("No inventory items found, waiting...");
+            return;
+          }
+          const targetItem = this.findTargetItem(inventoryItems);
+          if (targetItem) {
+            console.log("Found target item, double-clicking");
+            this.doubleClickElement(targetItem);
+            this.currentStep = "confirm_trade";
+            this.logStep("Double-clicked target item");
+          } else {
+            console.log("Target item not found on current page");
+            this.logStep("Target item not found on current page");
+          }
+        }
+        findTargetItem(inventoryItems) {
+          const targetName = this.collectedData.itemName;
+          const targetPosition = this.collectedData.itemPosition;
+          for (let item of inventoryItems) {
+            const title = item.getAttribute("title") || "";
+            const alt = item.querySelector("img")?.getAttribute("alt") || "";
+            if (title.includes(targetName) || alt.includes(targetName)) {
+              return item;
+            }
+          }
+          if (targetPosition && targetPosition <= inventoryItems.length) {
+            return inventoryItems[targetPosition - 1];
+          }
+          return null;
+        }
+        doubleClickElement(element) {
+          const event1 = new MouseEvent("click", { bubbles: true, cancelable: true });
+          const event2 = new MouseEvent("click", { bubbles: true, cancelable: true });
+          element.dispatchEvent(event1);
+          setTimeout(() => element.dispatchEvent(event2), 100);
+        }
+        // Step 4: Trade Confirmation
+        step4_ConfirmTrade() {
+          const confirmTradeElement = document.querySelector("div.content");
+          if (confirmTradeElement && confirmTradeElement.textContent.includes("Click here to confirm trade contents")) {
+            confirmTradeElement.click();
+            this.logStep("Clicked trade confirmation");
+            setTimeout(() => {
+              this.confirmGiftTrade();
+            }, 1e3);
+          }
+        }
+        confirmGiftTrade() {
+          const giftButton = document.querySelector("div.btn_green_steamui span");
+          if (giftButton && giftButton.textContent.includes("Yes, this is a gift")) {
+            giftButton.parentElement.click();
+            this.logStep("Confirmed gift trade");
+            setTimeout(() => {
+              this.makeOffer();
+            }, 1e3);
+          }
+        }
+        makeOffer() {
+          const makeOfferButton = document.querySelector("#trade_confirmbtn");
+          if (makeOfferButton) {
+            makeOfferButton.click();
+            this.logStep("Clicked Make Offer button");
+            this.currentStep = "complete";
+          }
+        }
+        completeVerification() {
+          this.logTradeCompletion();
+          this.currentStep = "idle";
+          console.log("Trade verification completed successfully");
+          setTimeout(() => {
+            this.resetForNextTrade();
+          }, 2e3);
+        }
+        // Utility methods
+        findButtonByText(text) {
+          const buttons = document.querySelectorAll("button");
+          return Array.from(buttons).find((button) => {
+            const span = button.querySelector("span.mat-button-wrapper");
+            return span && span.textContent.trim() === text;
+          });
+        }
+        clearAllTimeouts() {
+          this.stepTimeouts.forEach((timeout) => clearTimeout(timeout));
+          this.stepTimeouts.clear();
+        }
+        resetForNextTrade() {
+          this.collectedData = {};
+          this.currentStep = "waiting_for_trade_popup";
+          console.log("Reset for next trade verification");
+        }
+        // Logging methods
+        logStep(action, data = null) {
+          const logEntry = {
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            step: this.currentStep,
+            action,
+            data
+          };
+          this.tradeLog.push(logEntry);
+          console.log(`[SellItemVerification] ${action}`, data || "");
+        }
+        logError(error) {
+          const errorEntry = {
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            step: this.currentStep,
+            error: error.message,
+            stack: error.stack
+          };
+          this.tradeLog.push(errorEntry);
+          console.error(`[SellItemVerification] Error in ${this.currentStep}:`, error);
+        }
+        logTradeCompletion() {
+          const completionLog = {
+            timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+            action: "trade_completed",
+            collectedData: this.collectedData,
+            fullLog: this.tradeLog
+          };
+          console.log("Trade Verification Completed:", completionLog);
+          if (this.settings.logTradeData) {
+            this.saveTradeToStorage(completionLog);
+          }
+        }
+        saveTradeToStorage(tradeData) {
+          try {
+            const existingTrades = JSON.parse(localStorage.getItem("sellItemVerificationLogs") || "[]");
+            existingTrades.push(tradeData);
+            if (existingTrades.length > 100) {
+              existingTrades.splice(0, existingTrades.length - 100);
+            }
+            localStorage.setItem("sellItemVerificationLogs", JSON.stringify(existingTrades));
+          } catch (error) {
+            console.error("Error saving trade data to storage:", error);
+          }
+        }
+        // Public API methods
+        getCurrentStep() {
+          return this.currentStep;
+        }
+        getCollectedData() {
+          return { ...this.collectedData };
+        }
+        getTradeLog() {
+          return [...this.tradeLog];
+        }
+        isActive() {
+          return this.isRunning && this.currentStep !== "idle";
+        }
+        manualTrigger() {
+          if (!this.isRunning) {
+            this.start();
+          } else {
+            console.log("Automation is already running");
+          }
+        }
+      };
+    }
+  });
+
+  // src/automation/automation-manager.js
+  var AutomationManager;
+  var init_automation_manager = __esm({
+    "src/automation/automation-manager.js"() {
+      AutomationManager = class {
+        constructor() {
+          this.automations = /* @__PURE__ */ new Map();
+          this.isRunning = false;
+          this.globalSettings = {
+            maxConcurrentAutomations: 5,
+            globalInterval: 500,
+            errorRetryLimit: 3,
+            autoRestart: true
+          };
+          this.eventHandlers = /* @__PURE__ */ new Map();
+          this.stats = {
+            totalRuns: 0,
+            successfulRuns: 0,
+            failedRuns: 0,
+            startTime: null
+          };
+        }
+        registerAutomation(id, automation) {
+          if (this.automations.has(id)) {
+            throw new Error(`Automation with ID '${id}' already exists`);
+          }
+          const automationWrapper = {
+            id,
+            instance: automation,
+            status: "registered",
+            // registered, running, stopped, error
+            priority: automation.priority || 1,
+            lastRun: null,
+            errorCount: 0,
+            successCount: 0,
+            settings: {
+              enabled: true,
+              interval: automation.interval || this.globalSettings.globalInterval,
+              maxRetries: automation.maxRetries || this.globalSettings.errorRetryLimit,
+              ...automation.settings
+            }
+          };
+          this.automations.set(id, automationWrapper);
+          this.emit("automation-registered", { id, automation: automationWrapper });
+          return automationWrapper;
+        }
+        unregisterAutomation(id) {
+          const automation = this.automations.get(id);
+          if (!automation) {
+            throw new Error(`Automation with ID '${id}' not found`);
+          }
+          if (automation.status === "running") {
+            this.stopAutomation(id);
+          }
+          this.automations.delete(id);
+          this.emit("automation-unregistered", { id, automation });
+        }
+        startAutomation(id) {
+          const automation = this.automations.get(id);
+          if (!automation) {
+            throw new Error(`Automation with ID '${id}' not found`);
+          }
+          if (automation.status === "running") {
+            console.warn(`Automation '${id}' is already running`);
+            return;
+          }
+          if (!this.isRunning) {
+            this.isRunning = true;
+            if (!this.stats.startTime) {
+              this.stats.startTime = Date.now();
+            }
+          }
+          automation.status = "running";
+          automation.lastRun = Date.now();
+          if (automation.instance.start) {
+            try {
+              automation.instance.start();
+            } catch (error) {
+              this.handleAutomationError(id, error);
+              return;
+            }
+          }
+          this.emit("automation-started", { id, automation });
+          console.log(`Automation '${id}' started`);
+        }
+        stopAutomation(id) {
+          const automation = this.automations.get(id);
+          if (!automation) {
+            throw new Error(`Automation with ID '${id}' not found`);
+          }
+          if (automation.status !== "running") {
+            console.warn(`Automation '${id}' is not running`);
+            return;
+          }
+          automation.status = "stopped";
+          if (automation.instance.stop) {
+            try {
+              automation.instance.stop();
+            } catch (error) {
+              console.error(`Error stopping automation '${id}':`, error);
+            }
+          }
+          this.emit("automation-stopped", { id, automation });
+          console.log(`Automation '${id}' stopped`);
+        }
+        startAll() {
+          if (this.isRunning) {
+            console.warn("Automation manager is already running");
+            return;
+          }
+          this.isRunning = true;
+          if (!this.stats.startTime) {
+            this.stats.startTime = Date.now();
+          }
+          const sortedAutomations = Array.from(this.automations.values()).filter((auto) => auto.settings.enabled).sort((a, b) => b.priority - a.priority);
+          let started = 0;
+          for (const automation of sortedAutomations) {
+            if (started >= this.globalSettings.maxConcurrentAutomations) {
+              break;
+            }
+            try {
+              this.startAutomation(automation.id);
+              started++;
+            } catch (error) {
+              console.error(`Failed to start automation '${automation.id}':`, error);
+            }
+          }
+          this.emit("manager-started", { startedCount: started });
+          console.log(`Automation manager started with ${started} automations`);
+        }
+        stopAll() {
+          const runningAutomations = Array.from(this.automations.values()).filter((auto) => auto.status === "running");
+          for (const automation of runningAutomations) {
+            try {
+              this.stopAutomation(automation.id);
+            } catch (error) {
+              console.error(`Failed to stop automation '${automation.id}':`, error);
+            }
+          }
+          this.isRunning = false;
+          this.emit("manager-stopped", { stoppedCount: runningAutomations.length });
+          console.log(`Automation manager stopped, ${runningAutomations.length} automations stopped`);
+        }
+        pauseAutomation(id) {
+          const automation = this.automations.get(id);
+          if (!automation) {
+            throw new Error(`Automation with ID '${id}' not found`);
+          }
+          if (automation.status === "running") {
+            automation.status = "paused";
+            if (automation.instance.pause) {
+              automation.instance.pause();
+            }
+            this.emit("automation-paused", { id, automation });
+          }
+        }
+        resumeAutomation(id) {
+          const automation = this.automations.get(id);
+          if (!automation) {
+            throw new Error(`Automation with ID '${id}' not found`);
+          }
+          if (automation.status === "paused") {
+            automation.status = "running";
+            if (automation.instance.resume) {
+              automation.instance.resume();
+            }
+            this.emit("automation-resumed", { id, automation });
+          }
+        }
+        handleAutomationError(id, error) {
+          const automation = this.automations.get(id);
+          if (!automation) return;
+          automation.errorCount++;
+          automation.status = "error";
+          this.stats.failedRuns++;
+          this.emit("automation-error", { id, automation, error });
+          if (automation.errorCount < automation.settings.maxRetries && this.globalSettings.autoRestart) {
+            console.log(`Retrying automation '${id}' (attempt ${automation.errorCount + 1})`);
+            setTimeout(() => {
+              if (automation.status === "error") {
+                automation.status = "registered";
+                this.startAutomation(id);
+              }
+            }, 2e3 * automation.errorCount);
+          } else {
+            console.error(`Automation '${id}' failed after ${automation.errorCount} attempts:`, error);
+          }
+        }
+        updateAutomationSettings(id, settings) {
+          const automation = this.automations.get(id);
+          if (!automation) {
+            throw new Error(`Automation with ID '${id}' not found`);
+          }
+          automation.settings = { ...automation.settings, ...settings };
+          this.emit("automation-settings-updated", { id, automation, settings });
+        }
+        getAutomationStatus(id) {
+          const automation = this.automations.get(id);
+          return automation ? {
+            id: automation.id,
+            status: automation.status,
+            priority: automation.priority,
+            lastRun: automation.lastRun,
+            errorCount: automation.errorCount,
+            successCount: automation.successCount,
+            settings: automation.settings
+          } : null;
+        }
+        getAllAutomations() {
+          return Array.from(this.automations.values()).map((auto) => ({
+            id: auto.id,
+            status: auto.status,
+            priority: auto.priority,
+            lastRun: auto.lastRun,
+            errorCount: auto.errorCount,
+            successCount: auto.successCount,
+            settings: auto.settings
+          }));
+        }
+        getStats() {
+          const runningCount = Array.from(this.automations.values()).filter((auto) => auto.status === "running").length;
+          return {
+            ...this.stats,
+            totalAutomations: this.automations.size,
+            runningAutomations: runningCount,
+            isManagerRunning: this.isRunning,
+            uptime: this.stats.startTime ? Date.now() - this.stats.startTime : 0
+          };
+        }
+        on(event, handler) {
+          if (!this.eventHandlers.has(event)) {
+            this.eventHandlers.set(event, []);
+          }
+          this.eventHandlers.get(event).push(handler);
+        }
+        off(event, handler) {
+          const handlers = this.eventHandlers.get(event);
+          if (handlers) {
+            const index = handlers.indexOf(handler);
+            if (index > -1) {
+              handlers.splice(index, 1);
+            }
+          }
+        }
+        emit(event, data) {
+          const handlers = this.eventHandlers.get(event);
+          if (handlers) {
+            handlers.forEach((handler) => {
+              try {
+                handler(data);
+              } catch (error) {
+                console.error(`Error in event handler for '${event}':`, error);
+              }
+            });
+          }
+        }
+        // Coordination methods for inter-automation communication
+        setSharedData(key, value) {
+          if (!this.sharedData) {
+            this.sharedData = /* @__PURE__ */ new Map();
+          }
+          this.sharedData.set(key, value);
+          this.emit("shared-data-updated", { key, value });
+        }
+        getSharedData(key) {
+          return this.sharedData ? this.sharedData.get(key) : void 0;
+        }
+        // Resource management for preventing conflicts
+        acquireResource(resourceId, automationId) {
+          if (!this.resources) {
+            this.resources = /* @__PURE__ */ new Map();
+          }
+          if (this.resources.has(resourceId)) {
+            return false;
+          }
+          this.resources.set(resourceId, automationId);
+          this.emit("resource-acquired", { resourceId, automationId });
+          return true;
+        }
+        releaseResource(resourceId, automationId) {
+          if (!this.resources) return false;
+          const currentOwner = this.resources.get(resourceId);
+          if (currentOwner === automationId) {
+            this.resources.delete(resourceId);
+            this.emit("resource-released", { resourceId, automationId });
+            return true;
+          }
+          return false;
+        }
+      };
+    }
+  });
+
+  // src/components/tabbed-interface.js
+  var TabbedInterface;
+  var init_tabbed_interface = __esm({
+    "src/components/tabbed-interface.js"() {
+      init_dom_utils();
+      init_ui_components();
+      init_theme();
+      TabbedInterface = class {
+        constructor() {
+          this.tabs = /* @__PURE__ */ new Map();
+          this.activeTab = null;
+          this.container = null;
+          this.tabsContainer = null;
+          this.contentContainer = null;
+        }
+        createInterface() {
+          const mainContainer = DOMUtils.createElement("div", {
+            width: "100%",
+            height: "100%",
+            display: "flex",
+            flexDirection: "column"
+          });
+          this.tabsContainer = DOMUtils.createElement("div", {
+            display: "flex",
+            borderBottom: `2px solid ${Theme.colors.border}`,
+            marginBottom: Theme.spacing.md,
+            overflow: "auto",
+            whiteSpace: "nowrap"
+          });
+          this.contentContainer = DOMUtils.createElement("div", {
+            flex: "1",
+            overflow: "auto",
+            minHeight: "400px"
+          });
+          mainContainer.appendChild(this.tabsContainer);
+          mainContainer.appendChild(this.contentContainer);
+          this.container = mainContainer;
+          return mainContainer;
+        }
+        addTab(id, title, content, options = {}) {
+          if (this.tabs.has(id)) {
+            console.warn(`Tab with ID '${id}' already exists`);
+            return;
+          }
+          const tab = {
+            id,
+            title,
+            content,
+            isActive: false,
+            badge: options.badge || null,
+            icon: options.icon || null,
+            closable: options.closable || false,
+            button: null,
+            contentElement: null
+          };
+          tab.button = this.createTabButton(tab);
+          tab.contentElement = DOMUtils.createElement("div", {
+            display: "none",
+            width: "100%",
+            height: "100%"
+          });
+          if (typeof content === "function") {
+            tab.contentElement.appendChild(content());
+          } else if (content instanceof HTMLElement) {
+            tab.contentElement.appendChild(content);
+          } else {
+            tab.contentElement.innerHTML = content;
+          }
+          this.tabs.set(id, tab);
+          this.tabsContainer.appendChild(tab.button);
+          this.contentContainer.appendChild(tab.contentElement);
+          if (this.tabs.size === 1) {
+            this.switchToTab(id);
+          }
+          return tab;
+        }
+        createTabButton(tab) {
+          const button = DOMUtils.createElement("button", {
+            display: "flex",
+            alignItems: "center",
+            gap: Theme.spacing.xs,
+            padding: `${Theme.spacing.sm} ${Theme.spacing.md}`,
+            border: "none",
+            backgroundColor: Theme.colors.surface,
+            color: Theme.colors.onSurface,
+            cursor: "pointer",
+            borderTopLeftRadius: Theme.borderRadius.md,
+            borderTopRightRadius: Theme.borderRadius.md,
+            fontSize: Theme.typography.fontSize.sm,
+            fontWeight: Theme.typography.fontWeight.medium,
+            fontFamily: Theme.typography.fontFamily,
+            whiteSpace: "nowrap",
+            transition: `all ${Theme.animation.duration.normal}`,
+            hover: {
+              backgroundColor: Theme.colors.hover
+            }
+          });
+          if (tab.icon) {
+            const icon = DOMUtils.createElement("span");
+            icon.textContent = tab.icon;
+            button.appendChild(icon);
+          }
+          const title = DOMUtils.createElement("span");
+          title.textContent = tab.title;
+          button.appendChild(title);
+          if (tab.badge) {
+            const badge = DOMUtils.createElement("span", {
+              backgroundColor: Theme.colors.primary,
+              color: Theme.colors.onPrimary,
+              borderRadius: Theme.borderRadius.round,
+              padding: `2px ${Theme.spacing.xs}`,
+              fontSize: Theme.typography.fontSize.xs,
+              fontWeight: Theme.typography.fontWeight.bold,
+              minWidth: "18px",
+              textAlign: "center"
+            });
+            badge.textContent = tab.badge;
+            button.appendChild(badge);
+          }
+          if (tab.closable) {
+            const closeBtn = DOMUtils.createElement("span", {
+              marginLeft: Theme.spacing.xs,
+              padding: "2px",
+              borderRadius: Theme.borderRadius.sm,
+              cursor: "pointer",
+              hover: {
+                backgroundColor: Theme.colors.error,
+                color: Theme.colors.onPrimary
+              }
+            });
+            closeBtn.textContent = "\xD7";
+            closeBtn.addEventListener("click", (e) => {
+              e.stopPropagation();
+              this.removeTab(tab.id);
+            });
+            button.appendChild(closeBtn);
+          }
+          button.addEventListener("click", () => {
+            this.switchToTab(tab.id);
+          });
+          return button;
+        }
+        switchToTab(tabId) {
+          const tab = this.tabs.get(tabId);
+          if (!tab) {
+            console.warn(`Tab with ID '${tabId}' not found`);
+            return;
+          }
+          if (this.activeTab) {
+            this.activeTab.isActive = false;
+            this.activeTab.button.style.backgroundColor = Theme.colors.surface;
+            this.activeTab.button.style.borderBottom = `2px solid ${Theme.colors.border}`;
+            this.activeTab.contentElement.style.display = "none";
+          }
+          tab.isActive = true;
+          tab.button.style.backgroundColor = Theme.colors.background;
+          tab.button.style.borderBottom = `2px solid ${Theme.colors.primary}`;
+          tab.contentElement.style.display = "block";
+          this.activeTab = tab;
+          this.onTabChange?.(tabId, tab);
+        }
+        removeTab(tabId) {
+          const tab = this.tabs.get(tabId);
+          if (!tab) {
+            console.warn(`Tab with ID '${tabId}' not found`);
+            return;
+          }
+          if (tab.button.parentNode) {
+            tab.button.parentNode.removeChild(tab.button);
+          }
+          if (tab.contentElement.parentNode) {
+            tab.contentElement.parentNode.removeChild(tab.contentElement);
+          }
+          if (tab.isActive) {
+            const remainingTabs = Array.from(this.tabs.values()).filter((t) => t.id !== tabId);
+            if (remainingTabs.length > 0) {
+              this.switchToTab(remainingTabs[0].id);
+            } else {
+              this.activeTab = null;
+            }
+          }
+          this.tabs.delete(tabId);
+          this.onTabRemoved?.(tabId, tab);
+        }
+        updateTabBadge(tabId, badge) {
+          const tab = this.tabs.get(tabId);
+          if (!tab) return;
+          tab.badge = badge;
+          const badgeElement = tab.button.querySelector("span:last-child");
+          if (badgeElement && tab.badge) {
+            badgeElement.textContent = badge;
+          } else if (tab.badge && !badgeElement) {
+            const newBadge = DOMUtils.createElement("span", {
+              backgroundColor: Theme.colors.primary,
+              color: Theme.colors.onPrimary,
+              borderRadius: Theme.borderRadius.round,
+              padding: `2px ${Theme.spacing.xs}`,
+              fontSize: Theme.typography.fontSize.xs,
+              fontWeight: Theme.typography.fontWeight.bold,
+              minWidth: "18px",
+              textAlign: "center"
+            });
+            newBadge.textContent = badge;
+            tab.button.appendChild(newBadge);
+          }
+        }
+        updateTabTitle(tabId, title) {
+          const tab = this.tabs.get(tabId);
+          if (!tab) return;
+          tab.title = title;
+          const titleElement = tab.button.querySelector("span");
+          if (titleElement) {
+            titleElement.textContent = title;
+          }
+        }
+        getActiveTab() {
+          return this.activeTab;
+        }
+        getAllTabs() {
+          return Array.from(this.tabs.values());
+        }
+        hasTab(tabId) {
+          return this.tabs.has(tabId);
+        }
+        getTab(tabId) {
+          return this.tabs.get(tabId);
+        }
+        // Event handlers (can be overridden)
+        onTabChange(tabId, tab) {
+        }
+        onTabRemoved(tabId, tab) {
+        }
+        destroy() {
+          this.tabs.clear();
+          this.activeTab = null;
+          if (this.container && this.container.parentNode) {
+            this.container.parentNode.removeChild(this.container);
+          }
+        }
+      };
+    }
+  });
+
+  // src/components/automation-tabs.js
+  var AutomationTabs;
+  var init_automation_tabs = __esm({
+    "src/components/automation-tabs.js"() {
+      init_dom_utils();
+      init_ui_components();
+      init_theme();
+      AutomationTabs = class {
+        constructor(automationManager) {
+          this.automationManager = automationManager;
+          this.refreshIntervals = /* @__PURE__ */ new Map();
+        }
+        createSummaryTab() {
+          const container = DOMUtils.createElement("div", {
+            padding: Theme.spacing.md,
+            height: "100%",
+            overflow: "auto"
+          });
+          const statsSection = this.createStatsSection();
+          const overviewSection = this.createOverviewSection();
+          const activitySection = this.createActivitySection();
+          container.appendChild(statsSection);
+          container.appendChild(overviewSection);
+          container.appendChild(activitySection);
+          this.startRefreshTimer("summary", () => {
+            this.updateSummaryContent(container);
+          });
+          return container;
+        }
+        createStatsSection() {
+          const section = DOMUtils.createElement("div", {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("System Overview", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const statsGrid = DOMUtils.createElement("div", {
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+            gap: Theme.spacing.md
+          });
+          statsGrid.id = "summary-stats-grid";
+          section.appendChild(title);
+          section.appendChild(statsGrid);
+          return section;
+        }
+        createOverviewSection() {
+          const section = DOMUtils.createElement("div", {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Market Sniper", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const sniperInfo = DOMUtils.createElement("div", {
+            display: "flex",
+            flexDirection: "column",
+            gap: Theme.spacing.sm
+          });
+          sniperInfo.id = "summary-sniper-info";
+          section.appendChild(title);
+          section.appendChild(sniperInfo);
+          return section;
+        }
+        createActivitySection() {
+          const section = DOMUtils.createElement("div", {
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Recent Activity", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const activityLog = DOMUtils.createElement("div", {
+            maxHeight: "200px",
+            overflow: "auto",
+            fontSize: Theme.typography.fontSize.xs,
+            fontFamily: "monospace"
+          });
+          activityLog.id = "summary-activity-log";
+          section.appendChild(title);
+          section.appendChild(activityLog);
+          return section;
+        }
+        createWithdrawalTab() {
+          const container = DOMUtils.createElement("div", {
+            padding: Theme.spacing.md,
+            height: "100%",
+            overflow: "auto"
+          });
+          const controlPanel = this.createWithdrawalControls();
+          const statusPanel = this.createWithdrawalStatus();
+          const settingsPanel = this.createWithdrawalSettings();
+          container.appendChild(controlPanel);
+          container.appendChild(statusPanel);
+          container.appendChild(settingsPanel);
+          this.startRefreshTimer("withdrawal", () => {
+            this.updateWithdrawalContent(container);
+          });
+          return container;
+        }
+        createWithdrawalControls() {
+          const panel = DOMUtils.createElement("div", {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Withdrawal Controls", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const buttonGroup = DOMUtils.createElement("div", {
+            display: "flex",
+            gap: Theme.spacing.sm,
+            flexWrap: "wrap"
+          });
+          const automation = this.automationManager.getAutomationStatus("withdrawal");
+          const startBtn = UIComponents.createButton("Start Withdrawal", "success", "md", () => {
+            this.automationManager.startAutomation("withdrawal");
+          });
+          const stopBtn = UIComponents.createButton("Stop Withdrawal", "error", "md", () => {
+            this.automationManager.stopAutomation("withdrawal");
+          });
+          const pauseBtn = UIComponents.createButton("Pause", "secondary", "md", () => {
+            this.automationManager.pauseAutomation("withdrawal");
+          });
+          buttonGroup.appendChild(startBtn);
+          buttonGroup.appendChild(stopBtn);
+          buttonGroup.appendChild(pauseBtn);
+          panel.appendChild(title);
+          panel.appendChild(buttonGroup);
+          return panel;
+        }
+        createWithdrawalStatus() {
+          const panel = DOMUtils.createElement("div", {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Status & Statistics", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const statusGrid = DOMUtils.createElement("div", {
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+            gap: Theme.spacing.sm
+          });
+          statusGrid.id = "withdrawal-status-grid";
+          panel.appendChild(title);
+          panel.appendChild(statusGrid);
+          return panel;
+        }
+        createWithdrawalSettings() {
+          const panel = DOMUtils.createElement("div", {
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Settings", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const autoClearControls = UIComponents.createAutoClearControls();
+          const retriesContainer = DOMUtils.createElement("div", {
+            marginTop: Theme.spacing.md,
+            display: "flex",
+            alignItems: "center",
+            gap: Theme.spacing.sm
+          });
+          const retriesLabel = UIComponents.createLabel("Max Retries:", {
+            marginBottom: "0",
+            fontSize: Theme.typography.fontSize.sm
+          });
+          const retriesInput = UIComponents.createInput("number", {
+            width: "80px"
+          }, {
+            min: "1",
+            max: "10",
+            value: "3"
+          });
+          retriesContainer.appendChild(retriesLabel);
+          retriesContainer.appendChild(retriesInput);
+          panel.appendChild(title);
+          panel.appendChild(autoClearControls);
+          panel.appendChild(retriesContainer);
+          return panel;
+        }
+        createMarketMonitorTab() {
+          const container = DOMUtils.createElement("div", {
+            padding: Theme.spacing.md,
+            height: "100%",
+            overflow: "auto"
+          });
+          const controlPanel = this.createMonitorControls();
+          const alertsPanel = this.createPriceAlerts();
+          const itemsPanel = this.createMonitoredItems();
+          container.appendChild(controlPanel);
+          container.appendChild(alertsPanel);
+          container.appendChild(itemsPanel);
+          this.startRefreshTimer("market-monitor", () => {
+            this.updateMarketMonitorContent(container);
+          });
+          return container;
+        }
+        createMonitorControls() {
+          const panel = DOMUtils.createElement("div", {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Market Monitor Controls", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const buttonGroup = DOMUtils.createElement("div", {
+            display: "flex",
+            gap: Theme.spacing.sm,
+            flexWrap: "wrap"
+          });
+          const startBtn = UIComponents.createButton("Start Monitoring", "success", "md", () => {
+            this.automationManager.startAutomation("market-monitor");
+          });
+          const stopBtn = UIComponents.createButton("Stop Monitoring", "error", "md", () => {
+            this.automationManager.stopAutomation("market-monitor");
+          });
+          buttonGroup.appendChild(startBtn);
+          buttonGroup.appendChild(stopBtn);
+          panel.appendChild(title);
+          panel.appendChild(buttonGroup);
+          return panel;
+        }
+        createPriceAlerts() {
+          const panel = DOMUtils.createElement("div", {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Recent Price Alerts", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const alertsList = DOMUtils.createElement("div", {
+            maxHeight: "200px",
+            overflow: "auto"
+          });
+          alertsList.id = "price-alerts-list";
+          panel.appendChild(title);
+          panel.appendChild(alertsList);
+          return panel;
+        }
+        createMonitoredItems() {
+          const panel = DOMUtils.createElement("div", {
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Monitored Items", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const itemsList = DOMUtils.createElement("div", {
+            maxHeight: "300px",
+            overflow: "auto"
+          });
+          itemsList.id = "monitored-items-list";
+          panel.appendChild(title);
+          panel.appendChild(itemsList);
+          return panel;
+        }
+        // Update methods
+        updateSummaryContent(container) {
+          const stats = this.automationManager.getStats();
+          const statsGrid = container.querySelector("#summary-stats-grid");
+          const sniperInfo = container.querySelector("#summary-sniper-info");
+          if (statsGrid) {
+            this.updateStatsGrid(statsGrid, stats);
+          }
+          if (sniperInfo) {
+            this.updateSniperInfo(sniperInfo);
+          }
+        }
+        updateStatsGrid(grid, stats) {
+          grid.innerHTML = "";
+          const statsData = [
+            { label: "Total Automations", value: stats.totalAutomations, color: Theme.colors.info },
+            { label: "Running", value: stats.runningAutomations, color: Theme.colors.success },
+            { label: "Success Rate", value: `${Math.round(stats.successfulRuns / (stats.successfulRuns + stats.failedRuns) * 100 || 0)}%`, color: Theme.colors.success },
+            { label: "Uptime", value: this.formatUptime(stats.uptime), color: Theme.colors.primary }
+          ];
+          statsData.forEach((stat) => {
+            const statCard = DOMUtils.createElement("div", {
+              textAlign: "center",
+              padding: Theme.spacing.md,
+              backgroundColor: Theme.colors.surface,
+              borderRadius: Theme.borderRadius.md,
+              border: `1px solid ${Theme.colors.border}`
+            });
+            const value = DOMUtils.createElement("div", {
+              fontSize: Theme.typography.fontSize.xxl,
+              fontWeight: Theme.typography.fontWeight.bold,
+              color: stat.color,
+              marginBottom: Theme.spacing.xs
+            });
+            value.textContent = stat.value;
+            const label = DOMUtils.createElement("div", {
+              fontSize: Theme.typography.fontSize.sm,
+              color: Theme.colors.onSurface
+            });
+            label.textContent = stat.label;
+            statCard.appendChild(value);
+            statCard.appendChild(label);
+            grid.appendChild(statCard);
+          });
+        }
+        updateSniperInfo(container) {
+          container.innerHTML = "";
+          const stats = this.automationManager.getStats();
+          const withdrawalStatus = this.automationManager.getAutomationStatus("withdrawal");
+          const monitorStatus = this.automationManager.getAutomationStatus("market-monitor");
+          const statusCard = DOMUtils.createElement("div", {
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.sm,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const statusInfo = DOMUtils.createElement("div");
+          const sniperName = DOMUtils.createElement("div", {
+            fontWeight: Theme.typography.fontWeight.bold,
+            fontSize: Theme.typography.fontSize.base,
+            marginBottom: Theme.spacing.xs
+          });
+          sniperName.textContent = "\u{1F3AF} Market Sniper";
+          const sniperStatus = DOMUtils.createElement("div", {
+            fontSize: Theme.typography.fontSize.sm,
+            color: this.getStatusColor(stats.runningAutomations > 0 ? "running" : "stopped")
+          });
+          sniperStatus.textContent = `Status: ${stats.runningAutomations > 0 ? "RUNNING" : "STOPPED"}`;
+          const componentsStatus = DOMUtils.createElement("div", {
+            fontSize: Theme.typography.fontSize.xs,
+            color: Theme.colors.onSurface,
+            marginTop: "2px"
+          });
+          const withdrawalText = withdrawalStatus ? withdrawalStatus.status.toUpperCase() : "STOPPED";
+          const monitorText = monitorStatus ? monitorStatus.status.toUpperCase() : "STOPPED";
+          componentsStatus.textContent = `Withdrawal: ${withdrawalText} | Monitor: ${monitorText}`;
+          statusInfo.appendChild(sniperName);
+          statusInfo.appendChild(sniperStatus);
+          statusInfo.appendChild(componentsStatus);
+          const quickControls = DOMUtils.createElement("div", {
+            display: "flex",
+            gap: Theme.spacing.xs
+          });
+          if (stats.runningAutomations > 0) {
+            const stopBtn = UIComponents.createButton("Stop", "error", "sm", () => {
+              this.automationManager.stopAll();
+            });
+            quickControls.appendChild(stopBtn);
+          } else {
+            const startBtn = UIComponents.createButton("Start", "success", "sm", () => {
+              this.automationManager.startAutomation("withdrawal");
+              this.automationManager.startAutomation("market-monitor");
+            });
+            quickControls.appendChild(startBtn);
+          }
+          statusCard.appendChild(statusInfo);
+          statusCard.appendChild(quickControls);
+          container.appendChild(statusCard);
+        }
+        getStatusColor(status) {
+          const colors = {
+            "running": Theme.colors.success,
+            "stopped": Theme.colors.error,
+            "paused": Theme.colors.warning,
+            "error": Theme.colors.error,
+            "registered": Theme.colors.info
+          };
+          return colors[status] || Theme.colors.onSurface;
+        }
+        formatUptime(milliseconds) {
+          if (milliseconds === 0) return "0s";
+          const seconds = Math.floor(milliseconds / 1e3);
+          const minutes = Math.floor(seconds / 60);
+          const hours = Math.floor(minutes / 60);
+          if (hours > 0) return `${hours}h ${minutes % 60}m`;
+          if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+          return `${seconds}s`;
+        }
+        startRefreshTimer(tabId, updateFn) {
+          if (this.refreshIntervals.has(tabId)) {
+            clearInterval(this.refreshIntervals.get(tabId));
+          }
+          const interval = setInterval(updateFn, 2e3);
+          this.refreshIntervals.set(tabId, interval);
+        }
+        stopRefreshTimer(tabId) {
+          if (this.refreshIntervals.has(tabId)) {
+            clearInterval(this.refreshIntervals.get(tabId));
+            this.refreshIntervals.delete(tabId);
+          }
+        }
+        stopAllRefreshTimers() {
+          this.refreshIntervals.forEach((interval, tabId) => {
+            clearInterval(interval);
+          });
+          this.refreshIntervals.clear();
+        }
+        destroy() {
+          this.stopAllRefreshTimers();
+        }
+      };
+    }
+  });
+
   // src/market-scraper.js
   var MarketItemScraper;
   var init_market_scraper = __esm({
@@ -937,15 +2511,28 @@ var RollMoney = (() => {
       init_data_scraper();
       init_item_filter();
       init_withdrawal_automation();
+      init_market_monitor();
+      init_sell_item_verification();
+      init_automation_manager();
+      init_tabbed_interface();
+      init_automation_tabs();
       init_theme();
       MarketItemScraper = class {
         constructor() {
           this.isScraperActive = false;
           this.dataScraper = new DataScraper();
           this.itemFilter = new ItemFilter();
-          this.automation = new WithdrawalAutomation(this.dataScraper, this.itemFilter);
+          this.automationManager = new AutomationManager();
+          this.withdrawalAutomation = new WithdrawalAutomation(this.dataScraper, this.itemFilter);
+          this.marketMonitor = new MarketMonitor(this.dataScraper, this.itemFilter);
+          this.sellItemVerification = new SellItemVerification();
+          this.automationManager.registerAutomation("withdrawal", this.withdrawalAutomation);
+          this.automationManager.registerAutomation("market-monitor", this.marketMonitor);
+          this.automationManager.registerAutomation("sell-item-verification", this.sellItemVerification);
           this.overlay = null;
           this.resultsArea = null;
+          this.tabbedInterface = null;
+          this.automationTabs = null;
           this.initializeKeyboardShortcut();
         }
         initializeKeyboardShortcut() {
@@ -980,112 +2567,442 @@ var RollMoney = (() => {
             onPositionSave: (x, y) => {
               localStorage.setItem("scraperOverlayX", x);
               localStorage.setItem("scraperOverlayY", y);
+            },
+            onClose: () => {
+              this.closeOverlay();
             }
+          });
+          this.tabbedInterface = new TabbedInterface();
+          this.automationTabs = new AutomationTabs(this.automationManager);
+          const tabbedContainer = this.tabbedInterface.createInterface();
+          const configTabContent = this.createConfigurationTab();
+          this.tabbedInterface.addTab("summary", "Summary", () => this.automationTabs.createSummaryTab(), {
+            icon: "\u{1F4CA}"
+          });
+          this.tabbedInterface.addTab("sniper", "Market Sniper", configTabContent, {
+            icon: "\u{1F3AF}"
+          });
+          this.tabbedInterface.addTab("sell-verification", "Sell Verification", () => this.createSellVerificationTab(), {
+            icon: "\u2705"
+          });
+          this.appendComponentsToOverlay({
+            dragHandle,
+            tabbedContainer
+          });
+        }
+        createConfigurationTab() {
+          const container = DOMUtils.createElement("div", {
+            padding: Theme.spacing.md,
+            height: "100%",
+            overflow: "auto"
           });
           const jsonConfig = UIComponents.createJsonConfigSection((config) => {
             this.itemFilter.setCustomFilterConfig(config);
           });
-          const resultsSection = UIComponents.createResultsArea();
-          this.resultsArea = resultsSection.textarea;
-          const controlButtons = UIComponents.createControlButtons({
-            onScrape: () => this.handleScrapeItems(),
-            onCopy: () => this.handleCopyResults(),
-            onClear: () => this.handleClearProcessed(),
-            onClose: () => this.closeOverlay()
+          const configSection = DOMUtils.createElement("div", {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
           });
-          const autoWithdrawButtons = UIComponents.createAutoWithdrawButtons({
-            onStart: () => this.handleStartAutoWithdraw(),
-            onStop: () => this.handleStopAutoWithdraw()
-          });
-          const testButton = UIComponents.createTestRefreshButton(() => {
-            this.automation.testRefreshButtonFunctionality();
-          });
-          const autoClearControls = UIComponents.createAutoClearControls();
-          this.appendComponentsToOverlay({
-            dragHandle,
-            jsonConfig,
-            resultsSection,
-            controlButtons,
-            autoWithdrawButtons,
-            testButton,
-            autoClearControls
-          });
+          configSection.appendChild(jsonConfig.label);
+          configSection.appendChild(jsonConfig.textarea);
+          configSection.appendChild(jsonConfig.loadButton);
+          const controlsSection = this.createSniperControls();
+          const statusSection = this.createSniperStatus();
+          container.appendChild(configSection);
+          container.appendChild(controlsSection);
+          container.appendChild(statusSection);
+          return container;
         }
-        appendComponentsToOverlay({ dragHandle, jsonConfig, resultsSection, controlButtons, autoWithdrawButtons, testButton, autoClearControls }) {
+        createSniperControls() {
+          const section = DOMUtils.createElement("div", {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Market Sniper Controls", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const buttonContainer = DOMUtils.createElement("div", {
+            display: "flex",
+            gap: Theme.spacing.md,
+            justifyContent: "center",
+            marginBottom: Theme.spacing.md
+          });
+          const startButton = UIComponents.createButton("Start Sniper", "success", "lg", () => {
+            this.handleStartSniper();
+          });
+          const stopButton = UIComponents.createButton("Stop Sniper", "error", "lg", () => {
+            this.handleStopSniper();
+          });
+          buttonContainer.appendChild(startButton);
+          buttonContainer.appendChild(stopButton);
+          section.appendChild(title);
+          section.appendChild(buttonContainer);
+          return section;
+        }
+        createSniperStatus() {
+          const section = DOMUtils.createElement("div", {
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Sniper Status", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const statusGrid = DOMUtils.createElement("div", {
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+            gap: Theme.spacing.sm
+          });
+          statusGrid.id = "sniper-status-grid";
+          section.appendChild(title);
+          section.appendChild(statusGrid);
+          setInterval(() => {
+            this.updateSniperStatus();
+          }, 1e3);
+          return section;
+        }
+        appendComponentsToOverlay({ dragHandle, tabbedContainer }) {
           this.overlay.insertBefore(dragHandle, this.overlay.firstChild);
-          const createSectionDivider = () => {
-            return DOMUtils.createElement("div", {
-              height: "1px",
-              backgroundColor: Theme.colors.border,
-              margin: `${Theme.spacing.md} 0`,
-              width: "100%"
+          this.overlay.appendChild(tabbedContainer);
+        }
+        handleStartSniper() {
+          console.log("Starting Market Sniper");
+          try {
+            this.automationManager.startAutomation("withdrawal");
+            this.automationManager.startAutomation("market-monitor");
+            this.withdrawalAutomation.startAutoClear(5);
+            UIComponents.showNotification("Market Sniper started successfully!", "success");
+          } catch (error) {
+            console.error("Failed to start Market Sniper:", error);
+            UIComponents.showNotification("Failed to start Market Sniper", "error");
+          }
+        }
+        handleStopSniper() {
+          console.log("Stopping Market Sniper");
+          try {
+            this.automationManager.stopAll();
+            UIComponents.showNotification("Market Sniper stopped successfully!", "success");
+          } catch (error) {
+            console.error("Failed to stop Market Sniper:", error);
+            UIComponents.showNotification("Failed to stop Market Sniper", "error");
+          }
+        }
+        updateSniperStatus() {
+          const statusGrid = document.getElementById("sniper-status-grid");
+          if (!statusGrid) return;
+          const stats = this.automationManager.getStats();
+          const withdrawalStatus = this.automationManager.getAutomationStatus("withdrawal");
+          const monitorStatus = this.automationManager.getAutomationStatus("market-monitor");
+          const statusData = [
+            {
+              label: "Status",
+              value: stats.runningAutomations > 0 ? "RUNNING" : "STOPPED",
+              color: stats.runningAutomations > 0 ? Theme.colors.success : Theme.colors.error
+            },
+            {
+              label: "Items Processed",
+              value: this.dataScraper.getProcessedItemsCount(),
+              color: Theme.colors.info
+            },
+            {
+              label: "Uptime",
+              value: this.formatUptime(stats.uptime),
+              color: Theme.colors.primary
+            }
+          ];
+          statusGrid.innerHTML = "";
+          statusData.forEach((stat) => {
+            const statCard = DOMUtils.createElement("div", {
+              textAlign: "center",
+              padding: Theme.spacing.md,
+              backgroundColor: Theme.colors.surfaceVariant,
+              borderRadius: Theme.borderRadius.md,
+              border: `1px solid ${Theme.colors.border}`
             });
-          };
-          const buttonGroup = DOMUtils.createElement("div", {
-            display: "flex",
-            flexWrap: "wrap",
-            gap: Theme.spacing.sm,
+            const value = DOMUtils.createElement("div", {
+              fontSize: Theme.typography.fontSize.xl,
+              fontWeight: Theme.typography.fontWeight.bold,
+              color: stat.color,
+              marginBottom: Theme.spacing.xs
+            });
+            value.textContent = stat.value;
+            const label = DOMUtils.createElement("div", {
+              fontSize: Theme.typography.fontSize.sm,
+              color: Theme.colors.onSurface
+            });
+            label.textContent = stat.label;
+            statCard.appendChild(value);
+            statCard.appendChild(label);
+            statusGrid.appendChild(statCard);
+          });
+        }
+        formatUptime(milliseconds) {
+          if (milliseconds === 0) return "0s";
+          const seconds = Math.floor(milliseconds / 1e3);
+          const minutes = Math.floor(seconds / 60);
+          const hours = Math.floor(minutes / 60);
+          if (hours > 0) return `${hours}h ${minutes % 60}m`;
+          if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+          return `${seconds}s`;
+        }
+        createSellVerificationTab() {
+          const container = DOMUtils.createElement("div", {
+            padding: Theme.spacing.md,
+            height: "100%",
+            overflow: "auto"
+          });
+          const controlsSection = this.createSellVerificationControls();
+          const statusSection = this.createSellVerificationStatus();
+          const dataSection = this.createSellVerificationData();
+          const logsSection = this.createSellVerificationLogs();
+          container.appendChild(controlsSection);
+          container.appendChild(statusSection);
+          container.appendChild(dataSection);
+          container.appendChild(logsSection);
+          setInterval(() => {
+            this.updateSellVerificationStatus();
+          }, 1e3);
+          return container;
+        }
+        createSellVerificationControls() {
+          const section = DOMUtils.createElement("div", {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Sell Item Verification Controls", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
             marginBottom: Theme.spacing.md
           });
-          [controlButtons.scrapeButton, controlButtons.copyButton, controlButtons.clearButton].forEach((btn) => {
-            buttonGroup.appendChild(btn);
-          });
-          const automationGroup = DOMUtils.createElement("div", {
+          const buttonContainer = DOMUtils.createElement("div", {
             display: "flex",
-            flexWrap: "wrap",
-            gap: Theme.spacing.sm,
+            gap: Theme.spacing.md,
+            justifyContent: "center",
             marginBottom: Theme.spacing.md
           });
-          [autoWithdrawButtons.startButton, autoWithdrawButtons.stopButton, testButton].forEach((btn) => {
-            automationGroup.appendChild(btn);
+          const startButton = UIComponents.createButton("Start Verification", "success", "lg", () => {
+            this.handleStartSellVerification();
           });
-          const closeButtonContainer = DOMUtils.createElement("div", {
-            display: "flex",
-            justifyContent: "flex-end",
-            marginTop: Theme.spacing.md
+          const stopButton = UIComponents.createButton("Stop Verification", "error", "lg", () => {
+            this.handleStopSellVerification();
           });
-          closeButtonContainer.appendChild(controlButtons.closeButton);
-          [
-            jsonConfig.label,
-            jsonConfig.textarea,
-            jsonConfig.loadButton,
-            createSectionDivider(),
-            resultsSection.label,
-            resultsSection.textarea,
-            createSectionDivider(),
-            buttonGroup,
-            automationGroup,
-            autoClearControls,
-            closeButtonContainer
-          ].forEach((component) => {
-            this.overlay.appendChild(component);
+          const manualTriggerButton = UIComponents.createButton("Manual Trigger", "secondary", "md", () => {
+            this.handleManualTrigger();
           });
+          buttonContainer.appendChild(startButton);
+          buttonContainer.appendChild(stopButton);
+          buttonContainer.appendChild(manualTriggerButton);
+          section.appendChild(title);
+          section.appendChild(buttonContainer);
+          return section;
         }
-        handleScrapeItems() {
-          const scrapedItems = this.dataScraper.scrapeMarketItems();
-          const filteredItems = this.itemFilter.filterItems(scrapedItems);
-          this.resultsArea.value = JSON.stringify(filteredItems, null, 2);
+        createSellVerificationStatus() {
+          const section = DOMUtils.createElement("div", {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Current Status", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const statusGrid = DOMUtils.createElement("div", {
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+            gap: Theme.spacing.sm
+          });
+          statusGrid.id = "sell-verification-status-grid";
+          section.appendChild(title);
+          section.appendChild(statusGrid);
+          return section;
         }
-        handleCopyResults() {
-          this.resultsArea.select();
-          document.execCommand("copy");
-          UIComponents.showNotification("\u{1F4CB} Results copied to clipboard!", "success");
+        createSellVerificationData() {
+          const section = DOMUtils.createElement("div", {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Last Collected Data", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const dataDisplay = DOMUtils.createElement("pre", {
+            backgroundColor: Theme.colors.surface,
+            padding: Theme.spacing.md,
+            borderRadius: Theme.borderRadius.sm,
+            fontSize: Theme.typography.fontSize.sm,
+            fontFamily: "monospace",
+            whiteSpace: "pre-wrap",
+            overflow: "auto",
+            maxHeight: "200px",
+            border: `1px solid ${Theme.colors.border}`
+          });
+          dataDisplay.id = "sell-verification-data-display";
+          dataDisplay.textContent = "No data collected yet...";
+          section.appendChild(title);
+          section.appendChild(dataDisplay);
+          return section;
         }
-        handleClearProcessed() {
-          const count = this.dataScraper.clearProcessedItems();
-          console.log(`Cleared ${count} processed items`);
+        createSellVerificationLogs() {
+          const section = DOMUtils.createElement("div", {
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const title = UIComponents.createLabel("Activity Log", {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+          });
+          const logDisplay = DOMUtils.createElement("div", {
+            backgroundColor: Theme.colors.surfaceVariant,
+            padding: Theme.spacing.md,
+            borderRadius: Theme.borderRadius.sm,
+            fontSize: Theme.typography.fontSize.sm,
+            fontFamily: "monospace",
+            height: "150px",
+            overflow: "auto",
+            border: `1px solid ${Theme.colors.border}`
+          });
+          logDisplay.id = "sell-verification-log-display";
+          const clearLogsButton = UIComponents.createButton("Clear Logs", "secondary", "sm", () => {
+            logDisplay.innerHTML = "";
+          });
+          section.appendChild(title);
+          section.appendChild(logDisplay);
+          section.appendChild(clearLogsButton);
+          return section;
         }
-        handleStartAutoWithdraw() {
-          console.log("Starting periodic scan");
-          const autoClearInput = this.overlay.querySelector('input[type="number"]');
-          const seconds = parseInt(autoClearInput?.value) || 5;
-          this.automation.startPeriodicScan();
-          this.automation.startAutoClear(seconds);
+        handleStartSellVerification() {
+          console.log("Starting Sell Item Verification");
+          try {
+            this.automationManager.startAutomation("sell-item-verification");
+            UIComponents.showNotification("Sell Item Verification started successfully!", "success");
+          } catch (error) {
+            console.error("Failed to start Sell Item Verification:", error);
+            UIComponents.showNotification("Failed to start Sell Item Verification", "error");
+          }
         }
-        handleStopAutoWithdraw() {
-          this.automation.stopPeriodicScan();
+        handleStopSellVerification() {
+          console.log("Stopping Sell Item Verification");
+          try {
+            this.automationManager.stopAutomation("sell-item-verification");
+            UIComponents.showNotification("Sell Item Verification stopped successfully!", "success");
+          } catch (error) {
+            console.error("Failed to stop Sell Item Verification:", error);
+            UIComponents.showNotification("Failed to stop Sell Item Verification", "error");
+          }
+        }
+        handleManualTrigger() {
+          console.log("Manual trigger for Sell Item Verification");
+          try {
+            this.sellItemVerification.manualTrigger();
+            UIComponents.showNotification("Manual trigger activated!", "info");
+          } catch (error) {
+            console.error("Failed to trigger Sell Item Verification:", error);
+            UIComponents.showNotification("Failed to trigger automation", "error");
+          }
+        }
+        updateSellVerificationStatus() {
+          const statusGrid = document.getElementById("sell-verification-status-grid");
+          const dataDisplay = document.getElementById("sell-verification-data-display");
+          const logDisplay = document.getElementById("sell-verification-log-display");
+          if (!statusGrid) return;
+          const automationStatus = this.automationManager.getAutomationStatus("sell-item-verification");
+          const isActive = this.sellItemVerification.isActive();
+          const currentStep = this.sellItemVerification.getCurrentStep();
+          const collectedData = this.sellItemVerification.getCollectedData();
+          const statusData = [
+            {
+              label: "Status",
+              value: automationStatus?.status === "running" ? "RUNNING" : "STOPPED",
+              color: automationStatus?.status === "running" ? Theme.colors.success : Theme.colors.error
+            },
+            {
+              label: "Current Step",
+              value: currentStep || "idle",
+              color: isActive ? Theme.colors.warning : Theme.colors.info
+            },
+            {
+              label: "Active",
+              value: isActive ? "YES" : "NO",
+              color: isActive ? Theme.colors.success : Theme.colors.error
+            }
+          ];
+          statusGrid.innerHTML = "";
+          statusData.forEach((stat) => {
+            const statCard = DOMUtils.createElement("div", {
+              textAlign: "center",
+              padding: Theme.spacing.md,
+              backgroundColor: Theme.colors.surfaceVariant,
+              borderRadius: Theme.borderRadius.md,
+              border: `1px solid ${Theme.colors.border}`
+            });
+            const value = DOMUtils.createElement("div", {
+              fontSize: Theme.typography.fontSize.xl,
+              fontWeight: Theme.typography.fontWeight.bold,
+              color: stat.color,
+              marginBottom: Theme.spacing.xs
+            });
+            value.textContent = stat.value;
+            const label = DOMUtils.createElement("div", {
+              fontSize: Theme.typography.fontSize.sm,
+              color: Theme.colors.onSurface
+            });
+            label.textContent = stat.label;
+            statCard.appendChild(value);
+            statCard.appendChild(label);
+            statusGrid.appendChild(statCard);
+          });
+          if (dataDisplay && Object.keys(collectedData).length > 0) {
+            dataDisplay.textContent = JSON.stringify(collectedData, null, 2);
+          }
+          if (logDisplay) {
+            const logs = this.sellItemVerification.getTradeLog();
+            const recentLogs = logs.slice(-10);
+            const logHtml = recentLogs.map((log) => {
+              const time = new Date(log.timestamp).toLocaleTimeString();
+              return `<div style="margin-bottom: 4px; color: ${Theme.colors.onSurface};">
+                    [${time}] ${log.action || log.step} ${log.data ? "- " + JSON.stringify(log.data) : ""}
+                </div>`;
+            }).join("");
+            logDisplay.innerHTML = logHtml || '<div style="color: #666;">No recent activity...</div>';
+            logDisplay.scrollTop = logDisplay.scrollHeight;
+          }
         }
         closeOverlay() {
+          if (this.automationManager.isRunning) {
+            this.automationManager.stopAll();
+          }
+          if (this.automationTabs) {
+            this.automationTabs.destroy();
+            this.automationTabs = null;
+          }
+          if (this.tabbedInterface) {
+            this.tabbedInterface.destroy();
+            this.tabbedInterface = null;
+          }
           DOMUtils.removeElementById("market-scraper-overlay");
           this.overlay = null;
           this.resultsArea = null;
@@ -1121,7 +3038,14 @@ var RollMoney = (() => {
           return this.dataScraper.getProcessedItemsCount();
         }
         isAutomationRunning() {
-          return this.automation.isAutomationRunning();
+          return this.automationManager.isRunning;
+        }
+        // Public API for accessing automation manager
+        getAutomationManager() {
+          return this.automationManager;
+        }
+        getAutomationStats() {
+          return this.automationManager.getStats();
         }
       };
     }

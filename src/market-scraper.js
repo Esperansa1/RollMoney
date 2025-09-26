@@ -3,6 +3,11 @@ import { UIComponents } from './components/ui-components.js';
 import { DataScraper } from './scrapers/data-scraper.js';
 import { ItemFilter } from './filters/item-filter.js';
 import { WithdrawalAutomation } from './automation/withdrawal-automation.js';
+import { MarketMonitor } from './automation/market-monitor.js';
+import { SellItemVerification } from './automation/sell-item-verification.js';
+import { AutomationManager } from './automation/automation-manager.js';
+import { TabbedInterface } from './components/tabbed-interface.js';
+import { AutomationTabs } from './components/automation-tabs.js';
 import { Theme } from './theme/theme.js';
 
 export class MarketItemScraper {
@@ -10,9 +15,22 @@ export class MarketItemScraper {
         this.isScraperActive = false;
         this.dataScraper = new DataScraper();
         this.itemFilter = new ItemFilter();
-        this.automation = new WithdrawalAutomation(this.dataScraper, this.itemFilter);
+
+        // Initialize automation manager and automations
+        this.automationManager = new AutomationManager();
+        this.withdrawalAutomation = new WithdrawalAutomation(this.dataScraper, this.itemFilter);
+        this.marketMonitor = new MarketMonitor(this.dataScraper, this.itemFilter);
+        this.sellItemVerification = new SellItemVerification();
+
+        // Register automations
+        this.automationManager.registerAutomation('withdrawal', this.withdrawalAutomation);
+        this.automationManager.registerAutomation('market-monitor', this.marketMonitor);
+        this.automationManager.registerAutomation('sell-item-verification', this.sellItemVerification);
+
         this.overlay = null;
         this.resultsArea = null;
+        this.tabbedInterface = null;
+        this.automationTabs = null;
 
         this.initializeKeyboardShortcut();
     }
@@ -54,136 +72,565 @@ export class MarketItemScraper {
             onPositionSave: (x, y) => {
                 localStorage.setItem('scraperOverlayX', x);
                 localStorage.setItem('scraperOverlayY', y);
+            },
+            onClose: () => {
+                this.closeOverlay();
             }
         });
 
+        // Create tabbed interface
+        this.tabbedInterface = new TabbedInterface();
+        this.automationTabs = new AutomationTabs(this.automationManager);
+
+        const tabbedContainer = this.tabbedInterface.createInterface();
+
+        // Create configuration tab content
+        const configTabContent = this.createConfigurationTab();
+
+        // Add tabs
+        this.tabbedInterface.addTab('summary', 'Summary', () => this.automationTabs.createSummaryTab(), {
+            icon: '📊'
+        });
+
+        this.tabbedInterface.addTab('sniper', 'Market Sniper', configTabContent, {
+            icon: '🎯'
+        });
+
+        this.tabbedInterface.addTab('sell-verification', 'Sell Verification', () => this.createSellVerificationTab(), {
+            icon: '✅'
+        });
+
+        this.appendComponentsToOverlay({
+            dragHandle,
+            tabbedContainer
+        });
+    }
+
+    createConfigurationTab() {
+        const container = DOMUtils.createElement('div', {
+            padding: Theme.spacing.md,
+            height: '100%',
+            overflow: 'auto'
+        });
+
+        // Filter Configuration Section
         const jsonConfig = UIComponents.createJsonConfigSection((config) => {
             this.itemFilter.setCustomFilterConfig(config);
         });
 
-        const resultsSection = UIComponents.createResultsArea();
-        this.resultsArea = resultsSection.textarea;
-
-        const controlButtons = UIComponents.createControlButtons({
-            onScrape: () => this.handleScrapeItems(),
-            onCopy: () => this.handleCopyResults(),
-            onClear: () => this.handleClearProcessed(),
-            onClose: () => this.closeOverlay()
+        const configSection = DOMUtils.createElement('div', {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
         });
 
-        const autoWithdrawButtons = UIComponents.createAutoWithdrawButtons({
-            onStart: () => this.handleStartAutoWithdraw(),
-            onStop: () => this.handleStopAutoWithdraw()
-        });
+        configSection.appendChild(jsonConfig.label);
+        configSection.appendChild(jsonConfig.textarea);
+        configSection.appendChild(jsonConfig.loadButton);
 
-        const testButton = UIComponents.createTestRefreshButton(() => {
-            this.automation.testRefreshButtonFunctionality();
-        });
+        // Market Sniper Controls Section
+        const controlsSection = this.createSniperControls();
 
-        const autoClearControls = UIComponents.createAutoClearControls();
+        // Status Section
+        const statusSection = this.createSniperStatus();
 
-        this.appendComponentsToOverlay({
-            dragHandle,
-            jsonConfig,
-            resultsSection,
-            controlButtons,
-            autoWithdrawButtons,
-            testButton,
-            autoClearControls
-        });
+        container.appendChild(configSection);
+        container.appendChild(controlsSection);
+        container.appendChild(statusSection);
+
+        return container;
     }
 
-    appendComponentsToOverlay({ dragHandle, jsonConfig, resultsSection, controlButtons, autoWithdrawButtons, testButton, autoClearControls }) {
+    createSniperControls() {
+        const section = DOMUtils.createElement('div', {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+        });
+
+        const title = UIComponents.createLabel('Market Sniper Controls', {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+        });
+
+        const buttonContainer = DOMUtils.createElement('div', {
+            display: 'flex',
+            gap: Theme.spacing.md,
+            justifyContent: 'center',
+            marginBottom: Theme.spacing.md
+        });
+
+        const startButton = UIComponents.createButton('Start Sniper', 'success', 'lg', () => {
+            this.handleStartSniper();
+        });
+
+        const stopButton = UIComponents.createButton('Stop Sniper', 'error', 'lg', () => {
+            this.handleStopSniper();
+        });
+
+        buttonContainer.appendChild(startButton);
+        buttonContainer.appendChild(stopButton);
+
+        section.appendChild(title);
+        section.appendChild(buttonContainer);
+
+        return section;
+    }
+
+    createSniperStatus() {
+        const section = DOMUtils.createElement('div', {
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+        });
+
+        const title = UIComponents.createLabel('Sniper Status', {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+        });
+
+        const statusGrid = DOMUtils.createElement('div', {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+            gap: Theme.spacing.sm
+        });
+        statusGrid.id = 'sniper-status-grid';
+
+        section.appendChild(title);
+        section.appendChild(statusGrid);
+
+        // Start refresh timer for status updates
+        setInterval(() => {
+            this.updateSniperStatus();
+        }, 1000);
+
+        return section;
+    }
+
+    appendComponentsToOverlay({ dragHandle, tabbedContainer }) {
         this.overlay.insertBefore(dragHandle, this.overlay.firstChild);
+        this.overlay.appendChild(tabbedContainer);
+    }
 
-        // Create section dividers for better organization
-        const createSectionDivider = () => {
-            return DOMUtils.createElement('div', {
-                height: '1px',
-                backgroundColor: Theme.colors.border,
-                margin: `${Theme.spacing.md} 0`,
-                width: '100%'
+    handleStartSniper() {
+        console.log("Starting Market Sniper");
+
+        try {
+            // Start both withdrawal automation and market monitor
+            this.automationManager.startAutomation('withdrawal');
+            this.automationManager.startAutomation('market-monitor');
+
+            // Start auto-clear with 5 second default
+            this.withdrawalAutomation.startAutoClear(5);
+
+            UIComponents.showNotification('Market Sniper started successfully!', 'success');
+        } catch (error) {
+            console.error('Failed to start Market Sniper:', error);
+            UIComponents.showNotification('Failed to start Market Sniper', 'error');
+        }
+    }
+
+    handleStopSniper() {
+        console.log("Stopping Market Sniper");
+
+        try {
+            // Stop all automations
+            this.automationManager.stopAll();
+            UIComponents.showNotification('Market Sniper stopped successfully!', 'success');
+        } catch (error) {
+            console.error('Failed to stop Market Sniper:', error);
+            UIComponents.showNotification('Failed to stop Market Sniper', 'error');
+        }
+    }
+
+    updateSniperStatus() {
+        const statusGrid = document.getElementById('sniper-status-grid');
+        if (!statusGrid) return;
+
+        const stats = this.automationManager.getStats();
+        const withdrawalStatus = this.automationManager.getAutomationStatus('withdrawal');
+        const monitorStatus = this.automationManager.getAutomationStatus('market-monitor');
+
+        const statusData = [
+            {
+                label: 'Status',
+                value: stats.runningAutomations > 0 ? 'RUNNING' : 'STOPPED',
+                color: stats.runningAutomations > 0 ? Theme.colors.success : Theme.colors.error
+            },
+            {
+                label: 'Items Processed',
+                value: this.dataScraper.getProcessedItemsCount(),
+                color: Theme.colors.info
+            },
+            {
+                label: 'Uptime',
+                value: this.formatUptime(stats.uptime),
+                color: Theme.colors.primary
+            }
+        ];
+
+        statusGrid.innerHTML = '';
+
+        statusData.forEach(stat => {
+            const statCard = DOMUtils.createElement('div', {
+                textAlign: 'center',
+                padding: Theme.spacing.md,
+                backgroundColor: Theme.colors.surfaceVariant,
+                borderRadius: Theme.borderRadius.md,
+                border: `1px solid ${Theme.colors.border}`
             });
-        };
 
-        const buttonGroup = DOMUtils.createElement('div', {
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: Theme.spacing.sm,
+            const value = DOMUtils.createElement('div', {
+                fontSize: Theme.typography.fontSize.xl,
+                fontWeight: Theme.typography.fontWeight.bold,
+                color: stat.color,
+                marginBottom: Theme.spacing.xs
+            });
+            value.textContent = stat.value;
+
+            const label = DOMUtils.createElement('div', {
+                fontSize: Theme.typography.fontSize.sm,
+                color: Theme.colors.onSurface
+            });
+            label.textContent = stat.label;
+
+            statCard.appendChild(value);
+            statCard.appendChild(label);
+            statusGrid.appendChild(statCard);
+        });
+    }
+
+    formatUptime(milliseconds) {
+        if (milliseconds === 0) return '0s';
+
+        const seconds = Math.floor(milliseconds / 1000);
+        const minutes = Math.floor(seconds / 60);
+        const hours = Math.floor(minutes / 60);
+
+        if (hours > 0) return `${hours}h ${minutes % 60}m`;
+        if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
+        return `${seconds}s`;
+    }
+
+    createSellVerificationTab() {
+        const container = DOMUtils.createElement('div', {
+            padding: Theme.spacing.md,
+            height: '100%',
+            overflow: 'auto'
+        });
+
+        // Control section
+        const controlsSection = this.createSellVerificationControls();
+
+        // Status section
+        const statusSection = this.createSellVerificationStatus();
+
+        // Data section
+        const dataSection = this.createSellVerificationData();
+
+        // Logs section
+        const logsSection = this.createSellVerificationLogs();
+
+        container.appendChild(controlsSection);
+        container.appendChild(statusSection);
+        container.appendChild(dataSection);
+        container.appendChild(logsSection);
+
+        // Start refresh timer for status updates
+        setInterval(() => {
+            this.updateSellVerificationStatus();
+        }, 1000);
+
+        return container;
+    }
+
+    createSellVerificationControls() {
+        const section = DOMUtils.createElement('div', {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+        });
+
+        const title = UIComponents.createLabel('Sell Item Verification Controls', {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
             marginBottom: Theme.spacing.md
         });
 
-        [controlButtons.scrapeButton, controlButtons.copyButton, controlButtons.clearButton].forEach(btn => {
-            buttonGroup.appendChild(btn);
-        });
-
-        const automationGroup = DOMUtils.createElement('div', {
+        const buttonContainer = DOMUtils.createElement('div', {
             display: 'flex',
-            flexWrap: 'wrap',
-            gap: Theme.spacing.sm,
+            gap: Theme.spacing.md,
+            justifyContent: 'center',
             marginBottom: Theme.spacing.md
         });
 
-        [autoWithdrawButtons.startButton, autoWithdrawButtons.stopButton, testButton].forEach(btn => {
-            automationGroup.appendChild(btn);
+        const startButton = UIComponents.createButton('Start Verification', 'success', 'lg', () => {
+            this.handleStartSellVerification();
         });
 
-        const closeButtonContainer = DOMUtils.createElement('div', {
-            display: 'flex',
-            justifyContent: 'flex-end',
-            marginTop: Theme.spacing.md
+        const stopButton = UIComponents.createButton('Stop Verification', 'error', 'lg', () => {
+            this.handleStopSellVerification();
         });
-        closeButtonContainer.appendChild(controlButtons.closeButton);
 
-        [
-            jsonConfig.label,
-            jsonConfig.textarea,
-            jsonConfig.loadButton,
-            createSectionDivider(),
-            resultsSection.label,
-            resultsSection.textarea,
-            createSectionDivider(),
-            buttonGroup,
-            automationGroup,
-            autoClearControls,
-            closeButtonContainer
-        ].forEach(component => {
-            this.overlay.appendChild(component);
+        const manualTriggerButton = UIComponents.createButton('Manual Trigger', 'secondary', 'md', () => {
+            this.handleManualTrigger();
         });
+
+        buttonContainer.appendChild(startButton);
+        buttonContainer.appendChild(stopButton);
+        buttonContainer.appendChild(manualTriggerButton);
+
+        section.appendChild(title);
+        section.appendChild(buttonContainer);
+
+        return section;
     }
 
-    handleScrapeItems() {
-        const scrapedItems = this.dataScraper.scrapeMarketItems();
-        const filteredItems = this.itemFilter.filterItems(scrapedItems);
-        this.resultsArea.value = JSON.stringify(filteredItems, null, 2);
+    createSellVerificationStatus() {
+        const section = DOMUtils.createElement('div', {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+        });
+
+        const title = UIComponents.createLabel('Current Status', {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+        });
+
+        const statusGrid = DOMUtils.createElement('div', {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+            gap: Theme.spacing.sm
+        });
+        statusGrid.id = 'sell-verification-status-grid';
+
+        section.appendChild(title);
+        section.appendChild(statusGrid);
+
+        return section;
     }
 
-    handleCopyResults() {
-        this.resultsArea.select();
-        document.execCommand('copy');
-        UIComponents.showNotification('📋 Results copied to clipboard!', 'success');
+    createSellVerificationData() {
+        const section = DOMUtils.createElement('div', {
+            marginBottom: Theme.spacing.lg,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+        });
+
+        const title = UIComponents.createLabel('Last Collected Data', {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+        });
+
+        const dataDisplay = DOMUtils.createElement('pre', {
+            backgroundColor: Theme.colors.surface,
+            padding: Theme.spacing.md,
+            borderRadius: Theme.borderRadius.sm,
+            fontSize: Theme.typography.fontSize.sm,
+            fontFamily: 'monospace',
+            whiteSpace: 'pre-wrap',
+            overflow: 'auto',
+            maxHeight: '200px',
+            border: `1px solid ${Theme.colors.border}`
+        });
+        dataDisplay.id = 'sell-verification-data-display';
+        dataDisplay.textContent = 'No data collected yet...';
+
+        section.appendChild(title);
+        section.appendChild(dataDisplay);
+
+        return section;
     }
 
-    handleClearProcessed() {
-        const count = this.dataScraper.clearProcessedItems();
-        console.log(`Cleared ${count} processed items`);
+    createSellVerificationLogs() {
+        const section = DOMUtils.createElement('div', {
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+        });
+
+        const title = UIComponents.createLabel('Activity Log', {
+            fontSize: Theme.typography.fontSize.lg,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.md
+        });
+
+        const logDisplay = DOMUtils.createElement('div', {
+            backgroundColor: Theme.colors.surfaceVariant,
+            padding: Theme.spacing.md,
+            borderRadius: Theme.borderRadius.sm,
+            fontSize: Theme.typography.fontSize.sm,
+            fontFamily: 'monospace',
+            height: '150px',
+            overflow: 'auto',
+            border: `1px solid ${Theme.colors.border}`
+        });
+        logDisplay.id = 'sell-verification-log-display';
+
+        const clearLogsButton = UIComponents.createButton('Clear Logs', 'secondary', 'sm', () => {
+            logDisplay.innerHTML = '';
+        });
+
+        section.appendChild(title);
+        section.appendChild(logDisplay);
+        section.appendChild(clearLogsButton);
+
+        return section;
     }
 
-    handleStartAutoWithdraw() {
-        console.log("Starting periodic scan");
+    handleStartSellVerification() {
+        console.log("Starting Sell Item Verification");
 
-        const autoClearInput = this.overlay.querySelector('input[type="number"]');
-        const seconds = parseInt(autoClearInput?.value) || 5;
-
-        this.automation.startPeriodicScan();
-        this.automation.startAutoClear(seconds);
+        try {
+            this.automationManager.startAutomation('sell-item-verification');
+            UIComponents.showNotification('Sell Item Verification started successfully!', 'success');
+        } catch (error) {
+            console.error('Failed to start Sell Item Verification:', error);
+            UIComponents.showNotification('Failed to start Sell Item Verification', 'error');
+        }
     }
 
-    handleStopAutoWithdraw() {
-        this.automation.stopPeriodicScan();
+    handleStopSellVerification() {
+        console.log("Stopping Sell Item Verification");
+
+        try {
+            this.automationManager.stopAutomation('sell-item-verification');
+            UIComponents.showNotification('Sell Item Verification stopped successfully!', 'success');
+        } catch (error) {
+            console.error('Failed to stop Sell Item Verification:', error);
+            UIComponents.showNotification('Failed to stop Sell Item Verification', 'error');
+        }
+    }
+
+    handleManualTrigger() {
+        console.log("Manual trigger for Sell Item Verification");
+
+        try {
+            this.sellItemVerification.manualTrigger();
+            UIComponents.showNotification('Manual trigger activated!', 'info');
+        } catch (error) {
+            console.error('Failed to trigger Sell Item Verification:', error);
+            UIComponents.showNotification('Failed to trigger automation', 'error');
+        }
+    }
+
+    updateSellVerificationStatus() {
+        const statusGrid = document.getElementById('sell-verification-status-grid');
+        const dataDisplay = document.getElementById('sell-verification-data-display');
+        const logDisplay = document.getElementById('sell-verification-log-display');
+
+        if (!statusGrid) return;
+
+        const automationStatus = this.automationManager.getAutomationStatus('sell-item-verification');
+        const isActive = this.sellItemVerification.isActive();
+        const currentStep = this.sellItemVerification.getCurrentStep();
+        const collectedData = this.sellItemVerification.getCollectedData();
+
+        // Update status grid
+        const statusData = [
+            {
+                label: 'Status',
+                value: automationStatus?.status === 'running' ? 'RUNNING' : 'STOPPED',
+                color: automationStatus?.status === 'running' ? Theme.colors.success : Theme.colors.error
+            },
+            {
+                label: 'Current Step',
+                value: currentStep || 'idle',
+                color: isActive ? Theme.colors.warning : Theme.colors.info
+            },
+            {
+                label: 'Active',
+                value: isActive ? 'YES' : 'NO',
+                color: isActive ? Theme.colors.success : Theme.colors.error
+            }
+        ];
+
+        statusGrid.innerHTML = '';
+
+        statusData.forEach(stat => {
+            const statCard = DOMUtils.createElement('div', {
+                textAlign: 'center',
+                padding: Theme.spacing.md,
+                backgroundColor: Theme.colors.surfaceVariant,
+                borderRadius: Theme.borderRadius.md,
+                border: `1px solid ${Theme.colors.border}`
+            });
+
+            const value = DOMUtils.createElement('div', {
+                fontSize: Theme.typography.fontSize.xl,
+                fontWeight: Theme.typography.fontWeight.bold,
+                color: stat.color,
+                marginBottom: Theme.spacing.xs
+            });
+            value.textContent = stat.value;
+
+            const label = DOMUtils.createElement('div', {
+                fontSize: Theme.typography.fontSize.sm,
+                color: Theme.colors.onSurface
+            });
+            label.textContent = stat.label;
+
+            statCard.appendChild(value);
+            statCard.appendChild(label);
+            statusGrid.appendChild(statCard);
+        });
+
+        // Update data display
+        if (dataDisplay && Object.keys(collectedData).length > 0) {
+            dataDisplay.textContent = JSON.stringify(collectedData, null, 2);
+        }
+
+        // Update log display (show last few entries)
+        if (logDisplay) {
+            const logs = this.sellItemVerification.getTradeLog();
+            const recentLogs = logs.slice(-10); // Last 10 entries
+
+            const logHtml = recentLogs.map(log => {
+                const time = new Date(log.timestamp).toLocaleTimeString();
+                return `<div style="margin-bottom: 4px; color: ${Theme.colors.onSurface};">
+                    [${time}] ${log.action || log.step} ${log.data ? '- ' + JSON.stringify(log.data) : ''}
+                </div>`;
+            }).join('');
+
+            logDisplay.innerHTML = logHtml || '<div style="color: #666;">No recent activity...</div>';
+            logDisplay.scrollTop = logDisplay.scrollHeight;
+        }
     }
 
     closeOverlay() {
+        // Stop all automations when closing
+        if (this.automationManager.isRunning) {
+            this.automationManager.stopAll();
+        }
+
+        // Clean up tabbed interface and automation tabs
+        if (this.automationTabs) {
+            this.automationTabs.destroy();
+            this.automationTabs = null;
+        }
+
+        if (this.tabbedInterface) {
+            this.tabbedInterface.destroy();
+            this.tabbedInterface = null;
+        }
+
         DOMUtils.removeElementById('market-scraper-overlay');
         this.overlay = null;
         this.resultsArea = null;
@@ -226,6 +673,15 @@ export class MarketItemScraper {
     }
 
     isAutomationRunning() {
-        return this.automation.isAutomationRunning();
+        return this.automationManager.isRunning;
+    }
+
+    // Public API for accessing automation manager
+    getAutomationManager() {
+        return this.automationManager;
+    }
+
+    getAutomationStats() {
+        return this.automationManager.getStats();
     }
 }

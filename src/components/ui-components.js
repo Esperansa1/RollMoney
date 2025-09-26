@@ -34,7 +34,39 @@ export class UIComponents {
             }
         });
 
-        dragHandle.textContent = '🔥 Money Maker';
+        const titleSpan = DOMUtils.createElement('span');
+        titleSpan.textContent = 'Money Maker';
+
+        const closeButton = DOMUtils.createElement('button', {
+            position: 'absolute',
+            right: Theme.spacing.sm,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            backgroundColor: 'transparent',
+            border: 'none',
+            color: Theme.colors.onPrimary,
+            fontSize: Theme.typography.fontSize.lg,
+            cursor: 'pointer',
+            padding: '0',
+            width: '20px',
+            height: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            hover: {
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                borderRadius: Theme.borderRadius.sm
+            }
+        });
+        closeButton.textContent = '×';
+        closeButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (callbacks.onClose) callbacks.onClose();
+        });
+
+        dragHandle.style.position = 'relative';
+        dragHandle.appendChild(titleSpan);
+        dragHandle.appendChild(closeButton);
 
         let isDragging = false;
         let currentX, currentY, initialX, initialY;
@@ -159,10 +191,14 @@ export class UIComponents {
     }
 
     static createJsonConfigSection(onLoad) {
-        const label = this.createLabel('🎯 Custom Filter Configuration');
+        const label = this.createLabel('Custom Filter Configuration');
 
         const textarea = this.createTextarea(
-            { height: '150px' },
+            {
+                height: '180px',
+                maxHeight: '180px',
+                overflow: 'auto'
+            },
             {
                 id: 'custom-filter-json',
                 placeholder: `Enter JSON configuration:
@@ -173,14 +209,14 @@ export class UIComponents {
             }
         );
 
-        const loadButton = this.createButton('🔄 Load Filter', 'primary', 'sm', () => {
+        const loadButton = this.createButton('Load Filter', 'primary', 'sm', () => {
             try {
                 const jsonInput = textarea.value.trim();
                 const config = jsonInput ? JSON.parse(jsonInput) : [];
                 if (onLoad) onLoad(config);
-                this.showNotification('✅ Filter configuration loaded!', 'success');
+                this.showNotification('Filter configuration loaded!', 'success');
             } catch (error) {
-                this.showNotification('❌ Invalid JSON: ' + error.message, 'error');
+                this.showNotification('Invalid JSON: ' + error.message, 'error');
             }
         });
 
@@ -188,9 +224,13 @@ export class UIComponents {
     }
 
     static createResultsArea() {
-        const label = this.createLabel('📊 Scraping Results');
+        const label = this.createLabel('Scraping Results');
         const textarea = this.createTextarea(
-            { height: '200px' },
+            {
+                height: '250px',
+                maxHeight: '250px',
+                overflow: 'auto'
+            },
             {
                 id: 'market-scraper-results',
                 placeholder: 'Results will appear here after scraping...'
@@ -200,27 +240,27 @@ export class UIComponents {
     }
 
     static createControlButtons(callbacks = {}) {
-        const scrapeButton = this.createButton('🔍 Scrape Items', 'primary', 'md', callbacks.onScrape);
-        const copyButton = this.createButton('📋 Copy Results', 'secondary', 'md', callbacks.onCopy);
-        const clearButton = this.createButton('🗑️ Clear Processed', 'secondary', 'md', callbacks.onClear);
-        const closeButton = this.createButton('❌ Close', 'error', 'sm', callbacks.onClose);
+        const scrapeButton = this.createButton('Scrape Items', 'primary', 'md', callbacks.onScrape);
+        const copyButton = this.createButton('Copy Results', 'secondary', 'md', callbacks.onCopy);
+        const clearButton = this.createButton('Clear Processed', 'secondary', 'md', callbacks.onClear);
+        const closeButton = this.createButton('Close', 'secondary', 'sm', callbacks.onClose);
 
         return { scrapeButton, copyButton, clearButton, closeButton };
     }
 
     static createAutoWithdrawButtons(callbacks = {}) {
-        const startButton = this.createButton('▶️ Start Auto-Withdraw', 'success', 'md', callbacks.onStart);
-        const stopButton = this.createButton('⏹️ Stop Auto-Withdraw', 'error', 'md', callbacks.onStop);
+        const startButton = this.createButton('Start Auto-Withdraw', 'success', 'md', callbacks.onStart);
+        const stopButton = this.createButton('Stop Auto-Withdraw', 'secondary', 'md', callbacks.onStop);
 
         return { startButton, stopButton };
     }
 
     static createTestRefreshButton(onTest) {
-        return this.createButton('🧪 Test Refresh', 'warning', 'sm', onTest);
+        return this.createButton('Test Refresh', 'secondary', 'sm', onTest);
     }
 
     static createAutoClearControls() {
-        const label = this.createLabel('⏰ Auto-clear interval:', {
+        const label = this.createLabel('Auto-clear interval:', {
             fontSize: Theme.typography.fontSize.xs,
             marginBottom: Theme.spacing.xs
         });
