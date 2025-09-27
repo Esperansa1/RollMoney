@@ -346,10 +346,16 @@ export class SellItemVerification {
 
     // Utility methods
     findButtonByText(text) {
-        const buttons = document.querySelectorAll('button');
+        // Look for both button elements and anchor elements with mat-flat-button attribute
+        const buttons = document.querySelectorAll('button, a[mat-flat-button]');
         return Array.from(buttons).find(button => {
             const span = button.querySelector('span.mat-button-wrapper');
-            return span && span.textContent.trim() === text;
+            if (span) {
+                const buttonText = span.textContent.trim();
+                // Case-insensitive comparison
+                return buttonText.toLowerCase() === text.toLowerCase();
+            }
+            return false;
         });
     }
 
