@@ -30,6 +30,10 @@ export class MarketItemScraper {
         // Auto-start sell verification if continuing from saved state
         this.checkAndContinueSellVerification();
 
+        // Debug: Log what's happening on page load
+        console.log('MarketScraper initialized on:', window.location.hostname);
+        console.log('Checking for saved automation state...');
+
         this.overlay = null;
         this.resultsArea = null;
         this.tabbedInterface = null;
@@ -512,25 +516,44 @@ export class MarketItemScraper {
     }
 
     checkAndContinueSellVerification() {
+        console.log('=== CHECKING SELL VERIFICATION STATE ===');
+        console.log('hasRestorableState:', this.sellItemVerification.hasRestorableState);
+
+        // Also check localStorage directly
+        const savedState = localStorage.getItem('sellItemVerificationState');
+        console.log('Raw localStorage state:', savedState);
+
+        if (savedState) {
+            try {
+                const parsedState = JSON.parse(savedState);
+                console.log('Parsed saved state:', parsedState);
+            } catch (e) {
+                console.error('Error parsing saved state:', e);
+            }
+        }
+
         // Check if automation has restorable state
         if (this.sellItemVerification.hasRestorableState) {
-            console.log('Found restorable sell verification state, auto-continuing automation');
+            console.log('✅ Found restorable sell verification state, auto-continuing automation');
 
             // Set appropriate step based on current page
             if (this.sellItemVerification.isSteamPage()) {
-                console.log('On Steam page - setting step to navigate_inventory');
+                console.log('✅ On Steam page - setting step to navigate_inventory');
                 this.sellItemVerification.currentStep = 'navigate_inventory';
             }
 
             // Automatically start the automation manager with sell verification
             setTimeout(() => {
                 try {
+                    console.log('🚀 Starting automation manager...');
                     this.automationManager.startAutomation('sell-item-verification');
-                    console.log('Auto-started sell item verification from saved state');
+                    console.log('✅ Auto-started sell item verification from saved state');
                 } catch (error) {
-                    console.error('Failed to auto-start sell verification:', error);
+                    console.error('❌ Failed to auto-start sell verification:', error);
                 }
             }, 2000); // Increased delay to ensure page is fully loaded
+        } else {
+            console.log('❌ No restorable state found');
         }
     }
 

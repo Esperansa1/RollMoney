@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "516d0588";
+  window.ROLLMONEY_VERSION = "d3db0442";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1204,11 +1204,18 @@ var RollMoney = (() => {
         }
         // Cross-page state management
         initializeCrossPageState() {
+          console.log("\u{1F504} SellItemVerification: Initializing cross-page state...");
+          console.log("\u{1F504} Current URL:", window.location.href);
           const savedState = this.loadState();
+          console.log("\u{1F504} Loaded state from localStorage:", savedState);
           if (savedState && savedState.isActive) {
-            console.log("Found saved state for cross-page continuation:", savedState);
+            console.log("\u2705 Found saved state for cross-page continuation:", savedState);
             this.restoreState(savedState);
             this.hasRestorableState = true;
+            console.log("\u2705 Set hasRestorableState = true");
+          } else {
+            console.log("\u274C No active saved state found");
+            this.hasRestorableState = false;
           }
         }
         saveState() {
@@ -2633,6 +2640,8 @@ var RollMoney = (() => {
           this.automationManager.registerAutomation("market-monitor", this.marketMonitor);
           this.automationManager.registerAutomation("sell-item-verification", this.sellItemVerification);
           this.checkAndContinueSellVerification();
+          console.log("MarketScraper initialized on:", window.location.hostname);
+          console.log("Checking for saved automation state...");
           this.overlay = null;
           this.resultsArea = null;
           this.tabbedInterface = null;
@@ -3005,20 +3014,35 @@ var RollMoney = (() => {
           }
         }
         checkAndContinueSellVerification() {
+          console.log("=== CHECKING SELL VERIFICATION STATE ===");
+          console.log("hasRestorableState:", this.sellItemVerification.hasRestorableState);
+          const savedState = localStorage.getItem("sellItemVerificationState");
+          console.log("Raw localStorage state:", savedState);
+          if (savedState) {
+            try {
+              const parsedState = JSON.parse(savedState);
+              console.log("Parsed saved state:", parsedState);
+            } catch (e) {
+              console.error("Error parsing saved state:", e);
+            }
+          }
           if (this.sellItemVerification.hasRestorableState) {
-            console.log("Found restorable sell verification state, auto-continuing automation");
+            console.log("\u2705 Found restorable sell verification state, auto-continuing automation");
             if (this.sellItemVerification.isSteamPage()) {
-              console.log("On Steam page - setting step to navigate_inventory");
+              console.log("\u2705 On Steam page - setting step to navigate_inventory");
               this.sellItemVerification.currentStep = "navigate_inventory";
             }
             setTimeout(() => {
               try {
+                console.log("\u{1F680} Starting automation manager...");
                 this.automationManager.startAutomation("sell-item-verification");
-                console.log("Auto-started sell item verification from saved state");
+                console.log("\u2705 Auto-started sell item verification from saved state");
               } catch (error) {
-                console.error("Failed to auto-start sell verification:", error);
+                console.error("\u274C Failed to auto-start sell verification:", error);
               }
             }, 2e3);
+          } else {
+            console.log("\u274C No restorable state found");
           }
         }
         updateSellVerificationStatus() {

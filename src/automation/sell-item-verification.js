@@ -26,15 +26,24 @@ export class SellItemVerification {
 
     // Cross-page state management
     initializeCrossPageState() {
+        console.log('🔄 SellItemVerification: Initializing cross-page state...');
+        console.log('🔄 Current URL:', window.location.href);
+
         // Check if we're continuing from another page
         const savedState = this.loadState();
+        console.log('🔄 Loaded state from localStorage:', savedState);
+
         if (savedState && savedState.isActive) {
-            console.log('Found saved state for cross-page continuation:', savedState);
+            console.log('✅ Found saved state for cross-page continuation:', savedState);
             this.restoreState(savedState);
 
             // Mark that we have state but don't auto-start here
             // Let the MarketScraper checkAndContinueSellVerification handle the start
             this.hasRestorableState = true;
+            console.log('✅ Set hasRestorableState = true');
+        } else {
+            console.log('❌ No active saved state found');
+            this.hasRestorableState = false;
         }
     }
 
