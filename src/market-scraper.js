@@ -512,10 +512,15 @@ export class MarketItemScraper {
     }
 
     checkAndContinueSellVerification() {
-        // Check if there's a saved automation state that should continue
-        const savedState = this.sellItemVerification.loadState();
-        if (savedState && savedState.isActive) {
-            console.log('Found active sell verification state, auto-continuing automation');
+        // Check if automation has restorable state
+        if (this.sellItemVerification.hasRestorableState) {
+            console.log('Found restorable sell verification state, auto-continuing automation');
+
+            // Set appropriate step based on current page
+            if (this.sellItemVerification.isSteamPage()) {
+                console.log('On Steam page - setting step to navigate_inventory');
+                this.sellItemVerification.currentStep = 'navigate_inventory';
+            }
 
             // Automatically start the automation manager with sell verification
             setTimeout(() => {
@@ -525,7 +530,7 @@ export class MarketItemScraper {
                 } catch (error) {
                     console.error('Failed to auto-start sell verification:', error);
                 }
-            }, 1000); // Small delay to ensure page is fully loaded
+            }, 2000); // Increased delay to ensure page is fully loaded
         }
     }
 

@@ -29,21 +29,12 @@ export class SellItemVerification {
         // Check if we're continuing from another page
         const savedState = this.loadState();
         if (savedState && savedState.isActive) {
-            console.log('Resuming sell item verification from saved state:', savedState);
+            console.log('Found saved state for cross-page continuation:', savedState);
             this.restoreState(savedState);
 
-            // Determine which page we're on and continue appropriate step
-            if (this.isSteamPage()) {
-                console.log('Detected Steam page, continuing with inventory navigation');
-                this.currentStep = 'navigate_inventory';
-                this.isRunning = true;
-                this.startStepMonitoring();
-            } else if (this.isCSGORollPage()) {
-                console.log('Detected CSGORoll page, continuing with trade process');
-                // Continue with existing step or wait for next popup
-                this.isRunning = true;
-                this.startStepMonitoring();
-            }
+            // Mark that we have state but don't auto-start here
+            // Let the MarketScraper checkAndContinueSellVerification handle the start
+            this.hasRestorableState = true;
         }
     }
 
@@ -109,6 +100,12 @@ export class SellItemVerification {
         this.saveState(); // Save state when starting
         this.startStepMonitoring();
         console.log('SellItemVerification automation started');
+        console.log('Current automation state:', {
+            currentStep: this.currentStep,
+            isRunning: this.isRunning,
+            hasCollectedData: Object.keys(this.collectedData).length > 0,
+            collectedData: this.collectedData
+        });
     }
 
     stop() {
@@ -298,6 +295,8 @@ export class SellItemVerification {
 
     // Step 3: Steam Inventory Navigation
     step3_NavigateInventory() {
+        console.log('Step 3: Steam Inventory Navigation - checking page elements');
+
         // Wait for new tab/page to load and check if we're on Steam inventory
         const pageControlCur = document.querySelector('#pagecontrol_cur');
 
@@ -305,12 +304,20 @@ export class SellItemVerification {
             const currentPage = parseInt(pageControlCur.textContent) || 1;
             const targetPage = this.collectedData.inventoryPage || 1;
 
+            console.log(`Steam inventory page detected. Current: ${currentPage}, Target: ${targetPage}`);
+
             if (currentPage !== targetPage) {
                 this.navigateToPage(currentPage, targetPage);
             } else {
                 console.log(`Already on correct page ${targetPage}`);
                 this.currentStep = 'select_item';
                 this.logStep(`Navigated to inventory page ${targetPage}`);
+            }
+        } else {
+            console.log('Steam inventory page control not found yet, waiting...');
+            // Check if we're on the right Steam domain but page hasn't loaded yet
+            if (this.isSteamPage()) {
+                console.log('On Steam domain but inventory not loaded yet');
             }
         }
     }

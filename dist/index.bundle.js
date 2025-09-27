@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "9e9157d3";
+  window.ROLLMONEY_VERSION = "516d0588";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1206,18 +1206,9 @@ var RollMoney = (() => {
         initializeCrossPageState() {
           const savedState = this.loadState();
           if (savedState && savedState.isActive) {
-            console.log("Resuming sell item verification from saved state:", savedState);
+            console.log("Found saved state for cross-page continuation:", savedState);
             this.restoreState(savedState);
-            if (this.isSteamPage()) {
-              console.log("Detected Steam page, continuing with inventory navigation");
-              this.currentStep = "navigate_inventory";
-              this.isRunning = true;
-              this.startStepMonitoring();
-            } else if (this.isCSGORollPage()) {
-              console.log("Detected CSGORoll page, continuing with trade process");
-              this.isRunning = true;
-              this.startStepMonitoring();
-            }
+            this.hasRestorableState = true;
           }
         }
         saveState() {
@@ -1274,6 +1265,12 @@ var RollMoney = (() => {
           this.saveState();
           this.startStepMonitoring();
           console.log("SellItemVerification automation started");
+          console.log("Current automation state:", {
+            currentStep: this.currentStep,
+            isRunning: this.isRunning,
+            hasCollectedData: Object.keys(this.collectedData).length > 0,
+            collectedData: this.collectedData
+          });
         }
         stop() {
           this.isRunning = false;
@@ -1422,16 +1419,23 @@ var RollMoney = (() => {
         }
         // Step 3: Steam Inventory Navigation
         step3_NavigateInventory() {
+          console.log("Step 3: Steam Inventory Navigation - checking page elements");
           const pageControlCur = document.querySelector("#pagecontrol_cur");
           if (pageControlCur) {
             const currentPage = parseInt(pageControlCur.textContent) || 1;
             const targetPage = this.collectedData.inventoryPage || 1;
+            console.log(`Steam inventory page detected. Current: ${currentPage}, Target: ${targetPage}`);
             if (currentPage !== targetPage) {
               this.navigateToPage(currentPage, targetPage);
             } else {
               console.log(`Already on correct page ${targetPage}`);
               this.currentStep = "select_item";
               this.logStep(`Navigated to inventory page ${targetPage}`);
+            }
+          } else {
+            console.log("Steam inventory page control not found yet, waiting...");
+            if (this.isSteamPage()) {
+              console.log("On Steam domain but inventory not loaded yet");
             }
           }
         }
@@ -3001,9 +3005,12 @@ var RollMoney = (() => {
           }
         }
         checkAndContinueSellVerification() {
-          const savedState = this.sellItemVerification.loadState();
-          if (savedState && savedState.isActive) {
-            console.log("Found active sell verification state, auto-continuing automation");
+          if (this.sellItemVerification.hasRestorableState) {
+            console.log("Found restorable sell verification state, auto-continuing automation");
+            if (this.sellItemVerification.isSteamPage()) {
+              console.log("On Steam page - setting step to navigate_inventory");
+              this.sellItemVerification.currentStep = "navigate_inventory";
+            }
             setTimeout(() => {
               try {
                 this.automationManager.startAutomation("sell-item-verification");
@@ -3011,7 +3018,7 @@ var RollMoney = (() => {
               } catch (error) {
                 console.error("Failed to auto-start sell verification:", error);
               }
-            }, 1e3);
+            }, 2e3);
           }
         }
         updateSellVerificationStatus() {
