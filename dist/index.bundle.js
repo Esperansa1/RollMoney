@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "ed821f32";
+  window.ROLLMONEY_VERSION = "e59611dc";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -807,11 +807,256 @@ var RollMoney = (() => {
     }
   });
 
+  // src/utils/dom-observer.js
+  var DOMObserver;
+  var init_dom_observer = __esm({
+    "src/utils/dom-observer.js"() {
+      DOMObserver = class {
+        /**
+         * Wait for an element to appear in the DOM
+         * @param {string} selector - CSS selector to wait for
+         * @param {number} timeout - Timeout in milliseconds (default: 5000)
+         * @param {Element} root - Root element to observe (default: document.body)
+         * @returns {Promise<Element>} - Resolves with the found element
+         */
+        static waitForElement(selector, timeout = 5e3, root = document.body) {
+          return new Promise((resolve, reject) => {
+            const existing = (root === document.body ? document : root).querySelector(selector);
+            if (existing) {
+              console.log(`\u2705 Element found immediately: ${selector}`);
+              return resolve(existing);
+            }
+            console.log(`\u{1F50D} Waiting for element: ${selector}`);
+            const observer = new MutationObserver((mutations) => {
+              const element = (root === document.body ? document : root).querySelector(selector);
+              if (element) {
+                console.log(`\u2705 Element appeared: ${selector}`);
+                observer.disconnect();
+                resolve(element);
+              }
+            });
+            observer.observe(root, {
+              childList: true,
+              subtree: true,
+              attributes: true
+            });
+            const timeoutId = setTimeout(() => {
+              observer.disconnect();
+              console.log(`\u274C Element timeout: ${selector}`);
+              reject(new Error(`Element ${selector} not found within ${timeout}ms`));
+            }, timeout);
+            const originalResolve = resolve;
+            resolve = (element) => {
+              clearTimeout(timeoutId);
+              originalResolve(element);
+            };
+          });
+        }
+        /**
+         * Wait for multiple elements to appear
+         * @param {string[]} selectors - Array of CSS selectors
+         * @param {number} timeout - Timeout in milliseconds
+         * @returns {Promise<Element[]>} - Resolves with array of found elements
+         */
+        static waitForElements(selectors, timeout = 5e3) {
+          return Promise.all(selectors.map(
+            (selector) => this.waitForElement(selector, timeout)
+          ));
+        }
+        /**
+         * Wait for a condition to become true using fast polling
+         * @param {Function} conditionFn - Function that returns true when condition is met
+         * @param {number} timeout - Timeout in milliseconds (default: 5000)
+         * @param {string} description - Description for logging
+         * @returns {Promise<void>} - Resolves when condition is met
+         */
+        static waitForCondition(conditionFn, timeout = 5e3, description = "condition") {
+          return new Promise((resolve, reject) => {
+            console.log(`\u{1F50D} Waiting for condition: ${description}`);
+            const check = () => {
+              try {
+                if (conditionFn()) {
+                  console.log(`\u2705 Condition met: ${description}`);
+                  resolve();
+                } else {
+                  requestAnimationFrame(check);
+                }
+              } catch (error) {
+                reject(error);
+              }
+            };
+            check();
+            setTimeout(() => {
+              console.log(`\u274C Condition timeout: ${description}`);
+              reject(new Error(`Condition "${description}" not met within ${timeout}ms`));
+            }, timeout);
+          });
+        }
+        /**
+         * Wait for an element to become enabled (not disabled)
+         * @param {Element|string} elementOrSelector - Element or selector
+         * @param {number} timeout - Timeout in milliseconds
+         * @returns {Promise<Element>} - Resolves with the enabled element
+         */
+        static waitForElementEnabled(elementOrSelector, timeout = 5e3) {
+          return new Promise(async (resolve, reject) => {
+            let element;
+            if (typeof elementOrSelector === "string") {
+              try {
+                element = await this.waitForElement(elementOrSelector, timeout);
+              } catch (error) {
+                return reject(error);
+              }
+            } else {
+              element = elementOrSelector;
+            }
+            if (!element.disabled) {
+              console.log(`\u2705 Element already enabled`);
+              return resolve(element);
+            }
+            console.log(`\u{1F50D} Waiting for element to be enabled`);
+            const observer = new MutationObserver(() => {
+              if (!element.disabled) {
+                console.log(`\u2705 Element became enabled`);
+                observer.disconnect();
+                resolve(element);
+              }
+            });
+            observer.observe(element, {
+              attributes: true,
+              attributeFilter: ["disabled"]
+            });
+            setTimeout(() => {
+              observer.disconnect();
+              console.log(`\u274C Element enable timeout`);
+              reject(new Error("Element did not become enabled within timeout"));
+            }, timeout);
+          });
+        }
+        /**
+         * Wait for an element to disappear from the DOM
+         * @param {string} selector - CSS selector to wait for disappearance
+         * @param {number} timeout - Timeout in milliseconds
+         * @returns {Promise<void>} - Resolves when element disappears
+         */
+        static waitForElementToDisappear(selector, timeout = 5e3) {
+          return new Promise((resolve, reject) => {
+            if (!document.querySelector(selector)) {
+              console.log(`\u2705 Element already absent: ${selector}`);
+              return resolve();
+            }
+            console.log(`\u{1F50D} Waiting for element to disappear: ${selector}`);
+            const observer = new MutationObserver(() => {
+              if (!document.querySelector(selector)) {
+                console.log(`\u2705 Element disappeared: ${selector}`);
+                observer.disconnect();
+                resolve();
+              }
+            });
+            observer.observe(document.body, {
+              childList: true,
+              subtree: true
+            });
+            setTimeout(() => {
+              observer.disconnect();
+              console.log(`\u274C Element disappear timeout: ${selector}`);
+              reject(new Error(`Element ${selector} did not disappear within ${timeout}ms`));
+            }, timeout);
+          });
+        }
+        /**
+         * Wait for text content to change in an element
+         * @param {Element|string} elementOrSelector - Element or selector
+         * @param {string} expectedText - Text to wait for (optional)
+         * @param {number} timeout - Timeout in milliseconds
+         * @returns {Promise<string>} - Resolves with the new text content
+         */
+        static waitForTextChange(elementOrSelector, expectedText = null, timeout = 5e3) {
+          return new Promise(async (resolve, reject) => {
+            let element;
+            if (typeof elementOrSelector === "string") {
+              try {
+                element = await this.waitForElement(elementOrSelector, timeout);
+              } catch (error) {
+                return reject(error);
+              }
+            } else {
+              element = elementOrSelector;
+            }
+            const initialText = element.textContent.trim();
+            if (expectedText && initialText === expectedText) {
+              console.log(`\u2705 Text already matches: "${expectedText}"`);
+              return resolve(initialText);
+            }
+            console.log(`\u{1F50D} Waiting for text change from: "${initialText}"`);
+            const observer = new MutationObserver(() => {
+              const newText = element.textContent.trim();
+              if (newText !== initialText && (!expectedText || newText === expectedText)) {
+                console.log(`\u2705 Text changed to: "${newText}"`);
+                observer.disconnect();
+                resolve(newText);
+              }
+            });
+            observer.observe(element, {
+              childList: true,
+              subtree: true,
+              characterData: true
+            });
+            setTimeout(() => {
+              observer.disconnect();
+              console.log(`\u274C Text change timeout`);
+              reject(new Error("Text did not change within timeout"));
+            }, timeout);
+          });
+        }
+        /**
+         * Wait for page to finish loading/changing after an action
+         * @param {number} stabilityTime - Time in ms to wait for stability (default: 100)
+         * @param {number} timeout - Maximum timeout
+         * @returns {Promise<void>}
+         */
+        static waitForPageStability(stabilityTime = 100, timeout = 5e3) {
+          return new Promise((resolve, reject) => {
+            let lastMutation = Date.now();
+            let stabilityTimer;
+            console.log(`\u{1F50D} Waiting for page stability (${stabilityTime}ms)`);
+            const observer = new MutationObserver(() => {
+              lastMutation = Date.now();
+              clearTimeout(stabilityTimer);
+              stabilityTimer = setTimeout(() => {
+                console.log(`\u2705 Page stable for ${stabilityTime}ms`);
+                observer.disconnect();
+                resolve();
+              }, stabilityTime);
+            });
+            observer.observe(document.body, {
+              childList: true,
+              subtree: true,
+              attributes: true
+            });
+            stabilityTimer = setTimeout(() => {
+              console.log(`\u2705 Page stable for ${stabilityTime}ms`);
+              observer.disconnect();
+              resolve();
+            }, stabilityTime);
+            setTimeout(() => {
+              observer.disconnect();
+              clearTimeout(stabilityTimer);
+              console.log(`\u274C Page stability timeout`);
+              reject(new Error("Page did not stabilize within timeout"));
+            }, timeout);
+          });
+        }
+      };
+    }
+  });
+
   // src/automation/withdrawal-automation.js
   var WithdrawalAutomation;
   var init_withdrawal_automation = __esm({
     "src/automation/withdrawal-automation.js"() {
       init_dom_utils();
+      init_dom_observer();
       WithdrawalAutomation = class {
         constructor(dataScraper, itemFilter) {
           this.dataScraper = dataScraper;
@@ -852,13 +1097,13 @@ var RollMoney = (() => {
             this.stopPeriodicScan();
           }
           this.isRunning = true;
-          this.scanInterval = setInterval(() => {
+          this.scanInterval = setInterval(async () => {
             try {
               const scrapedItems = this.dataScraper.scrapeMarketItems();
               const filteredItems = this.itemFilter.filterItems(scrapedItems);
               console.log("Filtered items:", filteredItems);
               if (filteredItems.length > 0) {
-                this.autoWithdrawItems(filteredItems);
+                await this.autoWithdrawItems(filteredItems);
               }
             } catch (error) {
               console.error("Error during periodic scan:", error);
@@ -877,113 +1122,202 @@ var RollMoney = (() => {
         isAutomationRunning() {
           return this.isRunning;
         }
-        autoWithdrawItems(filteredItems) {
+        async autoWithdrawItems(filteredItems) {
           const newItems = this.dataScraper.getNewItems(filteredItems);
-          let processedCount = 0;
-          const processItem = (index, retryCount = 0) => {
-            if (index >= newItems.length) {
+          console.log(`\u{1F680} Processing ${newItems.length} new items with zero delays`);
+          for (let index = 0; index < newItems.length; index++) {
+            try {
+              await this.processItemFast(newItems[index], index);
+            } catch (error) {
+              console.error(`\u274C Error processing item ${newItems[index].name}:`, error);
+              this.dataScraper.addProcessedItem(newItems[index].name);
+            }
+          }
+          console.log(`\u2705 Completed processing ${newItems.length} items`);
+        }
+        async processItemFast(item, index) {
+          const itemCard = this.dataScraper.findItemCardByName(item.name);
+          if (!itemCard) {
+            console.log(`\u274C Item card not found: ${item.name}`);
+            return;
+          }
+          const currentItemData = this.dataScraper.extractItemData(itemCard);
+          const stillMeetsFilters = this.itemFilter.filterItems([currentItemData]).length > 0;
+          if (!stillMeetsFilters) {
+            console.log(`\u26A0\uFE0F Item no longer meets filters: ${item.name}`);
+            this.dataScraper.addProcessedItem(item.name);
+            return;
+          }
+          this.dataScraper.addProcessedItem(item.name);
+          console.log(`\u{1F5B1}\uFE0F Clicking item: ${item.name}`);
+          itemCard.click();
+          try {
+            await this.attemptItemWithdrawalFast(item);
+          } catch (error) {
+            console.error(`\u274C Withdrawal failed for ${item.name}:`, error);
+            await this.closeAnyModals();
+          }
+        }
+        async attemptItemWithdrawalFast(item) {
+          console.log(`\u{1F4B0} Attempting fast withdrawal for: ${item.name}`);
+          try {
+            const withdrawButton = await DOMObserver.waitForCondition(
+              () => {
+                const buttons = document.querySelectorAll("button");
+                return Array.from(buttons).find(
+                  (btn) => btn.textContent.toLowerCase().includes("withdraw")
+                );
+              },
+              3e3,
+              "withdraw button to appear"
+            ).then(() => {
+              const buttons = document.querySelectorAll("button");
+              return Array.from(buttons).find(
+                (btn) => btn.textContent.toLowerCase().includes("withdraw")
+              );
+            });
+            if (!withdrawButton) {
+              throw new Error("Withdraw button not found");
+            }
+            console.log(`\u{1F50D} Found withdraw button for: ${item.name}`);
+            this.clickMaxButtonFast();
+            await DOMObserver.waitForElementEnabled(withdrawButton, 2e3);
+            console.log(`\u{1F5B1}\uFE0F Clicking withdraw button for: ${item.name}`);
+            withdrawButton.click();
+            await this.handleWithdrawalResultFast(item, withdrawButton);
+          } catch (error) {
+            console.error(`\u274C Fast withdrawal failed for ${item.name}:`, error);
+            throw error;
+          }
+        }
+        async handleWithdrawalResultFast(item, withdrawButton) {
+          console.log(`\u{1F4CB} Checking withdrawal result for: ${item.name}`);
+          try {
+            await DOMObserver.waitForPageStability(50, 3e3);
+            const pageText = document.body.innerText || "";
+            const notJoinableError = pageText.toLowerCase().includes("this trade is not joinable");
+            if (notJoinableError) {
+              console.log(`\u26A0\uFE0F Trade not joinable error for: ${item.name}`);
+              await this.handleNotJoinableError(item);
               return;
             }
-            const delay = Math.random() * 100 + 200;
-            setTimeout(() => {
-              try {
-                const itemCard = this.dataScraper.findItemCardByName(newItems[index].name);
-                if (itemCard) {
-                  const item = this.dataScraper.extractItemData(itemCard);
-                  const stillMeetsFilters = this.itemFilter.filterItems([item]).length > 0;
-                  if (!stillMeetsFilters) {
-                    this.dataScraper.addProcessedItem(newItems[index].name);
-                    processItem(index + 1, 0);
-                    return;
-                  }
-                  this.dataScraper.addProcessedItem(newItems[index].name);
-                  itemCard.click();
-                  setTimeout(() => {
-                    this.attemptItemWithdrawal(newItems[index], index, retryCount, processItem, processedCount);
-                  }, 200);
-                  this.clickMaxButton();
-                } else {
-                  processItem(index + 1, 0);
+            if (withdrawButton.disabled) {
+              console.log(`\u2705 Withdrawal successful for: ${item.name}`);
+              await this.closeModalSuccessfully();
+              return;
+            }
+            if (pageText.toLowerCase().includes("success") || pageText.toLowerCase().includes("completed") || pageText.toLowerCase().includes("withdrawn")) {
+              console.log(`\u2705 Withdrawal success detected for: ${item.name}`);
+              await this.closeModalSuccessfully();
+              return;
+            }
+            console.log(`\u{1F504} Unclear result, waiting for confirmation: ${item.name}`);
+            await DOMObserver.waitForCondition(
+              () => {
+                const newText = document.body.innerText || "";
+                return newText.toLowerCase().includes("success") || newText.toLowerCase().includes("error") || withdrawButton.disabled;
+              },
+              2e3,
+              "withdrawal confirmation"
+            );
+            if (withdrawButton.disabled) {
+              console.log(`\u2705 Withdrawal confirmed successful for: ${item.name}`);
+              await this.closeModalSuccessfully();
+            } else {
+              console.log(`\u274C Withdrawal may have failed for: ${item.name}`);
+              await this.closeAnyModals();
+            }
+          } catch (error) {
+            console.error(`\u274C Error handling withdrawal result for ${item.name}:`, error);
+            await this.closeAnyModals();
+          }
+        }
+        async handleNotJoinableError(item) {
+          console.log(`\u{1F504} Handling "not joinable" error for: ${item.name}`);
+          try {
+            const refreshButton = await DOMObserver.waitForElement(
+              'button[data-test="category-list-item"] img[src*="Knives.svg"]',
+              2e3
+            ).then((img) => img.closest("button"));
+            if (refreshButton) {
+              console.log(`\u{1F504} Clicking refresh button for: ${item.name}`);
+              refreshButton.click();
+              await DOMObserver.waitForPageStability(100, 3e3);
+              console.log(`\u{1F504} Retrying withdrawal after refresh for: ${item.name}`);
+              await this.attemptItemWithdrawalFast(item);
+            } else {
+              console.log(`\u274C No refresh button found for: ${item.name}`);
+              await this.closeAnyModals();
+            }
+          } catch (error) {
+            console.error(`\u274C Error handling not joinable for ${item.name}:`, error);
+            await this.closeAnyModals();
+          }
+        }
+        async closeModalSuccessfully() {
+          console.log(`\u2705 Closing modal after successful withdrawal`);
+          try {
+            this.clickMaxButtonFast();
+            await this.closeAnyModals();
+          } catch (error) {
+            console.error(`\u274C Error closing modal:`, error);
+          }
+        }
+        async closeAnyModals() {
+          console.log(`\u{1F6AA} Closing any open modals`);
+          try {
+            const closeSelectors = [
+              "button.close",
+              ".modal-close",
+              'button[aria-label="Close"]',
+              'button[data-test*="close"]',
+              ".overlay",
+              ".backdrop"
+            ];
+            for (const selector of closeSelectors) {
+              const elements = document.querySelectorAll(selector);
+              if (elements.length > 0) {
+                console.log(`\u{1F5B1}\uFE0F Clicking close element: ${selector}`);
+                elements.forEach((el) => el.click());
+                break;
+              }
+            }
+            const safeArea = document.querySelector(".header") || document.body;
+            const rect = safeArea.getBoundingClientRect();
+            const coordinates = {
+              x: rect.left + 10,
+              y: rect.top + 10
+            };
+            DOMUtils.dispatchClickEvent(safeArea, coordinates);
+            await DOMObserver.waitForElementToDisappear('.modal, .dialog, [role="dialog"]', 1e3);
+          } catch (error) {
+            console.log(`\u26A0\uFE0F Could not detect modal closure, continuing...`);
+          }
+        }
+        clickMaxButtonFast() {
+          try {
+            const maxSelectors = [
+              'button[class*="mat-flat-button"][class*="text-capitalize"]',
+              'button:contains("Max")',
+              'button[data-test*="max"]',
+              "button.max-button"
+            ];
+            for (const selector of maxSelectors) {
+              const buttons = document.querySelectorAll(selector);
+              for (const button of buttons) {
+                if (button.textContent.trim().toLowerCase().includes("max")) {
+                  console.log("\u{1F518} Clicking Max button");
+                  button.click();
+                  return true;
                 }
-              } catch (error) {
-                console.error(`Error processing item ${newItems[index].name}:`, error);
-                processItem(index + 1, 0);
               }
-            }, delay);
-          };
-          processItem(0);
-        }
-        attemptItemWithdrawal(item, index, retryCount, processItem, processedCount) {
-          const withdrawButton = DOMUtils.findElementByText(
-            document.querySelectorAll("button"),
-            "withdraw"
-          );
-          if (withdrawButton) {
-            let clicks = 0;
-            const clickInterval = setInterval(() => {
-              withdrawButton.click();
-              clicks++;
-              if (clicks >= 5) {
-                clearInterval(clickInterval);
-                setTimeout(() => {
-                  this.handleWithdrawalResult(item, index, retryCount, processItem, processedCount, withdrawButton);
-                }, 500);
-                this.clickMaxButton();
-              }
-            }, 200);
-          } else {
-            this.closeModalAndMoveToNextItem(index, processItem);
+            }
+            console.log("\u26A0\uFE0F Max button not found");
+            return false;
+          } catch (error) {
+            console.error("\u274C Error clicking Max button:", error);
+            return false;
           }
-        }
-        handleWithdrawalResult(item, index, retryCount, processItem, processedCount, withdrawButton) {
-          const pageText = document.body.innerText || "";
-          const notJoinableError = pageText.toLowerCase().includes("this trade is not joinable");
-          const refreshButton = document.querySelector('button[data-test="category-list-item"] img[src*="Knives.svg"]')?.closest("button");
-          const maxButton = DOMUtils.findElementByText(document.querySelectorAll("button"), "Max");
-          if (notJoinableError && refreshButton && retryCount < this.maxWithdrawRetries) {
-            this.retryWithdrawal(item, index, retryCount, processItem, refreshButton);
-          } else if (!notJoinableError && !withdrawButton.disabled) {
-            this.closePopupAndContinue(maxButton, processedCount, index, processItem);
-          } else {
-            processItem(index + 1, 0);
-          }
-        }
-        closePopupAndContinue(maxButton, processedCount, index, processItem) {
-          const safeArea = document.querySelector(".header") || document.body;
-          const rect = safeArea.getBoundingClientRect();
-          const coordinates = {
-            x: rect.left + 10,
-            y: rect.top + 10
-          };
-          DOMUtils.dispatchClickEvent(safeArea, coordinates);
-          setTimeout(() => {
-            if (maxButton) maxButton.click();
-            processedCount++;
-            processItem(index + 1, 0);
-          }, 400);
-        }
-        retryWithdrawal(item, index, retryCount, processItem, refreshButton) {
-          refreshButton.click();
-          setTimeout(() => {
-            refreshButton.click();
-            setTimeout(() => {
-              this.closeModalAndMoveToNextItem(index, processItem, retryCount + 1);
-            }, 300);
-          }, 300);
-        }
-        closeModalAndMoveToNextItem(index, processItem, retryCount = 0) {
-          const closeButtons = document.querySelectorAll('button.close, .modal-close, button[aria-label="Close"]');
-          closeButtons.forEach((btn) => btn.click());
-          processItem(index + 1, retryCount);
-        }
-        clickMaxButton() {
-          const maxButton = document.querySelector('button[class*="mat-flat-button"][class*="text-capitalize"]');
-          if (maxButton && maxButton.textContent.trim().includes("Max")) {
-            console.log("Found Max button using alternative selector, clicking...");
-            maxButton.click();
-            return true;
-          }
-          return false;
         }
         testRefreshButtonFunctionality() {
           const refreshButton = document.querySelector('button[data-test="category-list-item"] img[src*="Knives.svg"]')?.closest("button");
