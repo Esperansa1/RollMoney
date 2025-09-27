@@ -34,8 +34,30 @@ export class UIComponents {
             }
         });
 
-        const titleSpan = DOMUtils.createElement('span');
+        const titleContainer = DOMUtils.createElement('div', {
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+        });
+
+        const titleSpan = DOMUtils.createElement('span', {
+            fontSize: Theme.typography.fontSize.base,
+            fontWeight: Theme.typography.fontWeight.bold
+        });
         titleSpan.textContent = 'Money Maker';
+
+        const versionSpan = DOMUtils.createElement('span', {
+            fontSize: Theme.typography.fontSize.xs,
+            opacity: '0.8',
+            marginTop: '2px'
+        });
+
+        // Get version from global variable
+        const version = window.ROLLMONEY_VERSION || 'dev';
+        versionSpan.textContent = `v${version}`;
+
+        titleContainer.appendChild(titleSpan);
+        titleContainer.appendChild(versionSpan);
 
         const closeButton = DOMUtils.createElement('button', {
             position: 'absolute',
@@ -65,7 +87,7 @@ export class UIComponents {
         });
 
         dragHandle.style.position = 'relative';
-        dragHandle.appendChild(titleSpan);
+        dragHandle.appendChild(titleContainer);
         dragHandle.appendChild(closeButton);
 
         let isDragging = false;

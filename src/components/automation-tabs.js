@@ -406,11 +406,13 @@ export class AutomationTabs {
     updateStatsGrid(grid, stats) {
         grid.innerHTML = '';
 
+        const version = window.ROLLMONEY_VERSION || 'dev';
         const statsData = [
             { label: 'Total Automations', value: stats.totalAutomations, color: Theme.colors.info },
             { label: 'Running', value: stats.runningAutomations, color: Theme.colors.success },
             { label: 'Success Rate', value: `${Math.round((stats.successfulRuns / (stats.successfulRuns + stats.failedRuns) * 100) || 0)}%`, color: Theme.colors.success },
-            { label: 'Uptime', value: this.formatUptime(stats.uptime), color: Theme.colors.primary }
+            { label: 'Uptime', value: this.formatUptime(stats.uptime), color: Theme.colors.primary },
+            { label: 'Version', value: `v${version}`, color: Theme.colors.info }
         ];
 
         statsData.forEach(stat => {

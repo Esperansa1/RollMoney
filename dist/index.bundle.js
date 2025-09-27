@@ -1,4 +1,5 @@
 var RollMoney = (() => {
+  window.ROLLMONEY_VERSION = "9e9157d3";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -339,8 +340,25 @@ var RollMoney = (() => {
               cursor: "grabbing"
             }
           });
-          const titleSpan = DOMUtils.createElement("span");
+          const titleContainer = DOMUtils.createElement("div", {
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center"
+          });
+          const titleSpan = DOMUtils.createElement("span", {
+            fontSize: Theme.typography.fontSize.base,
+            fontWeight: Theme.typography.fontWeight.bold
+          });
           titleSpan.textContent = "Money Maker";
+          const versionSpan = DOMUtils.createElement("span", {
+            fontSize: Theme.typography.fontSize.xs,
+            opacity: "0.8",
+            marginTop: "2px"
+          });
+          const version = window.ROLLMONEY_VERSION || "dev";
+          versionSpan.textContent = `v${version}`;
+          titleContainer.appendChild(titleSpan);
+          titleContainer.appendChild(versionSpan);
           const closeButton = DOMUtils.createElement("button", {
             position: "absolute",
             right: Theme.spacing.sm,
@@ -368,7 +386,7 @@ var RollMoney = (() => {
             if (callbacks.onClose) callbacks.onClose();
           });
           dragHandle.style.position = "relative";
-          dragHandle.appendChild(titleSpan);
+          dragHandle.appendChild(titleContainer);
           dragHandle.appendChild(closeButton);
           let isDragging = false;
           let currentX, currentY, initialX, initialY;
@@ -2448,11 +2466,13 @@ var RollMoney = (() => {
         }
         updateStatsGrid(grid, stats) {
           grid.innerHTML = "";
+          const version = window.ROLLMONEY_VERSION || "dev";
           const statsData = [
             { label: "Total Automations", value: stats.totalAutomations, color: Theme.colors.info },
             { label: "Running", value: stats.runningAutomations, color: Theme.colors.success },
             { label: "Success Rate", value: `${Math.round(stats.successfulRuns / (stats.successfulRuns + stats.failedRuns) * 100 || 0)}%`, color: Theme.colors.success },
-            { label: "Uptime", value: this.formatUptime(stats.uptime), color: Theme.colors.primary }
+            { label: "Uptime", value: this.formatUptime(stats.uptime), color: Theme.colors.primary },
+            { label: "Version", value: `v${version}`, color: Theme.colors.info }
           ];
           statsData.forEach((stat) => {
             const statCard = DOMUtils.createElement("div", {
