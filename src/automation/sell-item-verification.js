@@ -105,7 +105,7 @@ export class SellItemVerification {
     // Automation manager lifecycle methods
     start() {
         this.isRunning = true;
-        this.currentStep = 'waiting_for_trade_popup'; // Start with proper first step
+        this.currentStep = 'wait_for_continue'; // Keep for debugging - WE ARE STILL DEBUGGING DONT TOUCH
         this.saveState(); // Save state when starting
         this.startStepMonitoring();
         console.log('SellItemVerification automation started');

@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "bb306883";
+  window.ROLLMONEY_VERSION = "34c792e7";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1268,7 +1268,7 @@ var RollMoney = (() => {
         // Automation manager lifecycle methods
         start() {
           this.isRunning = true;
-          this.currentStep = "waiting_for_trade_popup";
+          this.currentStep = "wait_for_continue";
           this.saveState();
           this.startStepMonitoring();
           console.log("SellItemVerification automation started");
