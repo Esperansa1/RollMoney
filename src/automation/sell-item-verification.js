@@ -7,6 +7,7 @@ export class SellItemVerification {
         this.collectedData = {};
         this.tradeLog = [];
         this.stepTimeouts = new Map();
+        this.stateKey = 'sellItemVerificationState';
 
         // Automation manager integration
         this.id = 'sell-item-verification';
@@ -18,12 +19,94 @@ export class SellItemVerification {
             stepCheckInterval: 500, // Check every 500ms
             logTradeData: true
         };
+
+        // Initialize cross-page state management
+        this.initializeCrossPageState();
+    }
+
+    // Cross-page state management
+    initializeCrossPageState() {
+        // Check if we're continuing from another page
+        const savedState = this.loadState();
+        if (savedState && savedState.isActive) {
+            console.log('Resuming sell item verification from saved state:', savedState);
+            this.restoreState(savedState);
+
+            // Determine which page we're on and continue appropriate step
+            if (this.isSteamPage()) {
+                console.log('Detected Steam page, continuing with inventory navigation');
+                this.currentStep = 'navigate_inventory';
+                this.isRunning = true;
+                this.startStepMonitoring();
+            } else if (this.isCSGORollPage()) {
+                console.log('Detected CSGORoll page, continuing with trade process');
+                // Continue with existing step or wait for next popup
+                this.isRunning = true;
+                this.startStepMonitoring();
+            }
+        }
+    }
+
+    saveState() {
+        const state = {
+            isActive: this.isRunning,
+            currentStep: this.currentStep,
+            collectedData: this.collectedData,
+            tradeLog: this.tradeLog,
+            timestamp: Date.now()
+        };
+
+        try {
+            localStorage.setItem(this.stateKey, JSON.stringify(state));
+        } catch (error) {
+            console.error('Failed to save automation state:', error);
+        }
+    }
+
+    loadState() {
+        try {
+            const stateJson = localStorage.getItem(this.stateKey);
+            if (stateJson) {
+                const state = JSON.parse(stateJson);
+                // Check if state is not too old (max 10 minutes)
+                if (Date.now() - state.timestamp < 10 * 60 * 1000) {
+                    return state;
+                }
+            }
+        } catch (error) {
+            console.error('Failed to load automation state:', error);
+        }
+        return null;
+    }
+
+    restoreState(state) {
+        this.currentStep = state.currentStep || 'idle';
+        this.collectedData = state.collectedData || {};
+        this.tradeLog = state.tradeLog || [];
+        console.log('Restored automation state:', state);
+    }
+
+    clearState() {
+        try {
+            localStorage.removeItem(this.stateKey);
+        } catch (error) {
+            console.error('Failed to clear automation state:', error);
+        }
+    }
+
+    isSteamPage() {
+        return window.location.hostname.includes('steamcommunity.com');
+    }
+
+    isCSGORollPage() {
+        return window.location.hostname.includes('csgoroll.com');
     }
 
     // Automation manager lifecycle methods
     start() {
         this.isRunning = true;
-        this.currentStep = 'wait_for_continue';
+        this.currentStep = 'wait_for_continue'; // Keep for debug purposes
+        this.saveState(); // Save state when starting
         this.startStepMonitoring();
         console.log('SellItemVerification automation started');
     }
@@ -32,6 +115,7 @@ export class SellItemVerification {
         this.isRunning = false;
         this.currentStep = 'idle';
         this.clearAllTimeouts();
+        this.clearState(); // Clear state when stopping
         console.log('SellItemVerification automation stopped');
     }
 
@@ -166,6 +250,7 @@ export class SellItemVerification {
             console.log('Extracted item data:', this.collectedData);
             this.logStep('Extracted item data', this.collectedData);
             this.currentStep = 'send_items';
+            this.saveState(); // Save state after data extraction
 
         } catch (error) {
             console.error('Error extracting item data:', error);
@@ -200,9 +285,14 @@ export class SellItemVerification {
         const sendButton = this.findButtonByText('Send Items Now');
         if (sendButton) {
             console.log('Found "Send Items Now" button');
-            sendButton.click();
+
+            // Save state before navigation to Steam page
             this.currentStep = 'navigate_inventory';
-            this.logStep('Clicked "Send Items Now" button');
+            this.saveState();
+            this.logStep('Clicked "Send Items Now" button - state saved for Steam page');
+
+            // Click button (this will navigate to Steam page and create new script instance)
+            sendButton.click();
         }
     }
 
@@ -336,6 +426,7 @@ export class SellItemVerification {
     completeVerification() {
         this.logTradeCompletion();
         this.currentStep = 'idle';
+        this.clearState(); // Clear state when trade is complete
         console.log('Trade verification completed successfully');
 
         // Reset for next trade

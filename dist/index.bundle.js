@@ -1170,6 +1170,7 @@ var RollMoney = (() => {
           this.collectedData = {};
           this.tradeLog = [];
           this.stepTimeouts = /* @__PURE__ */ new Map();
+          this.stateKey = "sellItemVerificationState";
           this.id = "sell-item-verification";
           this.priority = 2;
           this.interval = 1e3;
@@ -1181,11 +1182,78 @@ var RollMoney = (() => {
             // Check every 500ms
             logTradeData: true
           };
+          this.initializeCrossPageState();
+        }
+        // Cross-page state management
+        initializeCrossPageState() {
+          const savedState = this.loadState();
+          if (savedState && savedState.isActive) {
+            console.log("Resuming sell item verification from saved state:", savedState);
+            this.restoreState(savedState);
+            if (this.isSteamPage()) {
+              console.log("Detected Steam page, continuing with inventory navigation");
+              this.currentStep = "navigate_inventory";
+              this.isRunning = true;
+              this.startStepMonitoring();
+            } else if (this.isCSGORollPage()) {
+              console.log("Detected CSGORoll page, continuing with trade process");
+              this.isRunning = true;
+              this.startStepMonitoring();
+            }
+          }
+        }
+        saveState() {
+          const state = {
+            isActive: this.isRunning,
+            currentStep: this.currentStep,
+            collectedData: this.collectedData,
+            tradeLog: this.tradeLog,
+            timestamp: Date.now()
+          };
+          try {
+            localStorage.setItem(this.stateKey, JSON.stringify(state));
+          } catch (error) {
+            console.error("Failed to save automation state:", error);
+          }
+        }
+        loadState() {
+          try {
+            const stateJson = localStorage.getItem(this.stateKey);
+            if (stateJson) {
+              const state = JSON.parse(stateJson);
+              if (Date.now() - state.timestamp < 10 * 60 * 1e3) {
+                return state;
+              }
+            }
+          } catch (error) {
+            console.error("Failed to load automation state:", error);
+          }
+          return null;
+        }
+        restoreState(state) {
+          this.currentStep = state.currentStep || "idle";
+          this.collectedData = state.collectedData || {};
+          this.tradeLog = state.tradeLog || [];
+          console.log("Restored automation state:", state);
+        }
+        clearState() {
+          try {
+            localStorage.removeItem(this.stateKey);
+          } catch (error) {
+            console.error("Failed to clear automation state:", error);
+          }
+        }
+        isSteamPage() {
+          return window.location.hostname.includes("steamcommunity.com");
+        }
+        isCSGORollPage() {
+          return window.location.hostname.includes("csgoroll.com");
         }
         // Automation manager lifecycle methods
         start() {
           this.isRunning = true;
           this.currentStep = "wait_for_continue";
+          this.saveState();
           this.startStepMonitoring();
           console.log("SellItemVerification automation started");
         }
@@ -1193,6 +1261,7 @@ var RollMoney = (() => {
           this.isRunning = false;
           this.currentStep = "idle";
           this.clearAllTimeouts();
+          this.clearState();
           console.log("SellItemVerification automation stopped");
         }
         pause() {
@@ -1302,6 +1371,7 @@ var RollMoney = (() => {
             console.log("Extracted item data:", this.collectedData);
             this.logStep("Extracted item data", this.collectedData);
             this.currentStep = "send_items";
+            this.saveState();
           } catch (error) {
             console.error("Error extracting item data:", error);
             this.logError(error);
@@ -1326,9 +1396,10 @@ var RollMoney = (() => {
           const sendButton = this.findButtonByText("Send Items Now");
           if (sendButton) {
             console.log('Found "Send Items Now" button');
-            sendButton.click();
             this.currentStep = "navigate_inventory";
-            this.logStep('Clicked "Send Items Now" button');
+            this.saveState();
+            this.logStep('Clicked "Send Items Now" button - state saved for Steam page');
+            sendButton.click();
           }
         }
         // Step 3: Steam Inventory Navigation
@@ -1431,6 +1502,7 @@ var RollMoney = (() => {
         completeVerification() {
           this.logTradeCompletion();
           this.currentStep = "idle";
+          this.clearState();
           console.log("Trade verification completed successfully");
           setTimeout(() => {
             this.resetForNextTrade();
@@ -2536,6 +2608,7 @@ var RollMoney = (() => {
           this.automationManager.registerAutomation("withdrawal", this.withdrawalAutomation);
           this.automationManager.registerAutomation("market-monitor", this.marketMonitor);
           this.automationManager.registerAutomation("sell-item-verification", this.sellItemVerification);
+          this.checkAndContinueSellVerification();
           this.overlay = null;
           this.resultsArea = null;
           this.tabbedInterface = null;
@@ -2905,6 +2978,20 @@ var RollMoney = (() => {
           } catch (error) {
             console.error("Failed to trigger Sell Item Verification:", error);
             UIComponents.showNotification("Failed to trigger automation", "error");
+          }
+        }
+        checkAndContinueSellVerification() {
+          const savedState = this.sellItemVerification.loadState();
+          if (savedState && savedState.isActive) {
+            console.log("Found active sell verification state, auto-continuing automation");
+            setTimeout(() => {
+              try {
+                this.automationManager.startAutomation("sell-item-verification");
+                console.log("Auto-started sell item verification from saved state");
+              } catch (error) {
+                console.error("Failed to auto-start sell verification:", error);
+              }
+            }, 1e3);
           }
         }
         updateSellVerificationStatus() {

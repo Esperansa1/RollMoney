@@ -27,6 +27,9 @@ export class MarketItemScraper {
         this.automationManager.registerAutomation('market-monitor', this.marketMonitor);
         this.automationManager.registerAutomation('sell-item-verification', this.sellItemVerification);
 
+        // Auto-start sell verification if continuing from saved state
+        this.checkAndContinueSellVerification();
+
         this.overlay = null;
         this.resultsArea = null;
         this.tabbedInterface = null;
@@ -505,6 +508,24 @@ export class MarketItemScraper {
         } catch (error) {
             console.error('Failed to trigger Sell Item Verification:', error);
             UIComponents.showNotification('Failed to trigger automation', 'error');
+        }
+    }
+
+    checkAndContinueSellVerification() {
+        // Check if there's a saved automation state that should continue
+        const savedState = this.sellItemVerification.loadState();
+        if (savedState && savedState.isActive) {
+            console.log('Found active sell verification state, auto-continuing automation');
+
+            // Automatically start the automation manager with sell verification
+            setTimeout(() => {
+                try {
+                    this.automationManager.startAutomation('sell-item-verification');
+                    console.log('Auto-started sell item verification from saved state');
+                } catch (error) {
+                    console.error('Failed to auto-start sell verification:', error);
+                }
+            }, 1000); // Small delay to ensure page is fully loaded
         }
     }
 
