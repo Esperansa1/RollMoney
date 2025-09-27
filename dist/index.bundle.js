@@ -1323,7 +1323,7 @@ var RollMoney = (() => {
           }
         }
         step2_SendItems() {
-          const sendButton = this.findButtonByText("Send Items Now");
+          const sendButton = this.findButtonByText("SEND ITEMS NOW");
           if (sendButton) {
             console.log('Found "Send Items Now" button');
             sendButton.click();
