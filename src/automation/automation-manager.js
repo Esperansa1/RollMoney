@@ -59,6 +59,7 @@ export class AutomationManager {
 
     startAutomation(id) {
         const automation = this.automations.get(id);
+        console.log("Starting automation with ID", id)
         if (!automation) {
             throw new Error(`Automation with ID '${id}' not found`);
         }

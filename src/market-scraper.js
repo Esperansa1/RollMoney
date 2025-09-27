@@ -27,12 +27,11 @@ export class MarketItemScraper {
         this.automationManager.registerAutomation('market-monitor', this.marketMonitor);
         this.automationManager.registerAutomation('sell-item-verification', this.sellItemVerification);
 
-        // Auto-start sell verification if continuing from saved state
-        this.checkAndContinueSellVerification();
+        // Auto-start sell verification only if on Steam page with URL data
+        this.checkForSteamPageAutomation();
 
         // Debug: Log what's happening on page load
         console.log('MarketScraper initialized on:', window.location.hostname);
-        console.log('Checking for saved automation state...');
 
         this.overlay = null;
         this.resultsArea = null;
@@ -531,13 +530,13 @@ export class MarketItemScraper {
             // Stop all automations
             this.automationManager.stopAll();
 
-            // Clear sell verification state
-            this.sellItemVerification.clearState();
+            // Reset sell verification state
             this.sellItemVerification.isRunning = false;
             this.sellItemVerification.currentStep = 'idle';
+            this.sellItemVerification.collectedData = {};
+            this.sellItemVerification.tradeLog = [];
 
-            // Clear localStorage
-            localStorage.removeItem('sellItemVerificationState');
+            // localStorage no longer used - state is URL-based only
 
             UIComponents.showNotification('Emergency stop completed - all automation cleared!', 'success');
             console.log("🛑 Emergency stop completed");
@@ -588,16 +587,11 @@ export class MarketItemScraper {
             this.handleDebugInjectTestData();
         });
 
-        const fullSequenceBtn = UIComponents.createButton('Full CSGORoll Sequence', 'primary', 'sm', () => {
-            this.handleDebugFullSequence();
-        });
-
         debugButtonContainer.appendChild(extractDataBtn);
         debugButtonContainer.appendChild(sendItemsBtn);
         debugButtonContainer.appendChild(navigateInventoryBtn);
         debugButtonContainer.appendChild(viewStateBtn);
         debugButtonContainer.appendChild(injectTestDataBtn);
-        debugButtonContainer.appendChild(fullSequenceBtn);
 
         debugSection.appendChild(debugTitle);
         debugSection.appendChild(debugButtonContainer);
@@ -606,7 +600,7 @@ export class MarketItemScraper {
     }
 
     handleDebugExtractData() {
-        console.log("🔧 DEBUG: Manually triggering data extraction");
+        console.log("🔧 DEBUG: Manually triggering data extraction with retry logic");
         try {
             // First check if we're in the right state and have a modal
             const modal = document.querySelector('mat-dialog-container');
@@ -616,15 +610,15 @@ export class MarketItemScraper {
                 return;
             }
 
+            // Reset retry counter for fresh extraction
+            this.sellItemVerification.extractionAttempts = 0;
+
+            // Trigger extraction with retry logic
             this.sellItemVerification.step2_ExtractItemData();
 
-            // Check if data was extracted successfully
-            if (this.sellItemVerification.collectedData && Object.keys(this.sellItemVerification.collectedData).length > 0) {
-                console.log('✅ Data extracted successfully:', this.sellItemVerification.collectedData);
-                UIComponents.showNotification('Data extraction successful!', 'success');
-            } else {
-                UIComponents.showNotification('Data extraction triggered but no data found', 'warning');
-            }
+            UIComponents.showNotification('Data extraction started with retry logic', 'info');
+            console.log('🔄 Data extraction will retry automatically if data is incomplete');
+
         } catch (error) {
             console.error('Debug extract data error:', error);
             UIComponents.showNotification('Error in data extraction', 'error');
@@ -667,15 +661,24 @@ export class MarketItemScraper {
                 return;
             }
 
-            // Check if we have collected data
-            if (!this.sellItemVerification.collectedData || Object.keys(this.sellItemVerification.collectedData).length === 0) {
-                console.log('⚠️ No data collected - use "Inject Test Data" or extract data first');
-                UIComponents.showNotification('No item data available - inject test data first', 'warning');
+            // Try to load data from URL parameters first
+            console.log('🔗 Attempting to load data from URL parameters...');
+            const urlState = this.sellItemVerification.decodeDataFromUrlParams();
+
+            if (urlState && urlState.collectedData) {
+                console.log('✅ Found data in URL parameters:', urlState.collectedData);
+                this.sellItemVerification.collectedData = urlState.collectedData;
+                this.sellItemVerification.currentStep = 'navigate_inventory';
+                UIComponents.showNotification('Loaded data from URL parameters', 'success');
+            } else if (!this.sellItemVerification.collectedData || Object.keys(this.sellItemVerification.collectedData).length === 0) {
+                console.log('⚠️ No data found in URL or stored - cannot navigate inventory');
+                UIComponents.showNotification('No item data available - open Steam page from CSGORoll or inject test data', 'warning');
                 return;
             }
 
+            console.log('📋 Using collected data:', this.sellItemVerification.collectedData);
             this.sellItemVerification.step3_NavigateInventory();
-            UIComponents.showNotification('Navigate inventory triggered', 'info');
+            UIComponents.showNotification('Navigate inventory triggered with data', 'info');
         } catch (error) {
             console.error('Debug navigate inventory error:', error);
             UIComponents.showNotification('Error in navigate inventory', 'error');
@@ -688,13 +691,11 @@ export class MarketItemScraper {
             currentStep: this.sellItemVerification.currentStep,
             isRunning: this.sellItemVerification.isRunning,
             collectedData: this.sellItemVerification.collectedData,
-            hasRestorableState: this.sellItemVerification.hasRestorableState
         };
 
         console.log("Current automation state:", state);
 
-        const savedState = localStorage.getItem('sellItemVerificationState');
-        console.log("Saved localStorage state:", savedState);
+        console.log("Note: localStorage no longer used - state is URL-based only");
 
         UIComponents.showNotification('State logged to console', 'info');
     }
@@ -703,114 +704,61 @@ export class MarketItemScraper {
         console.log("🔧 DEBUG: Injecting test data");
 
         const testData = {
-            itemName: "AK-47 | Redline (Field-Tested)",
-            itemCategory: "Rifle",
-            itemValue: "45.50 TKN",
-            inventoryPage: 1,
-            itemPosition: 3,
+            itemName: "Candy Apple",
+            itemCategory: "Glock-18",
+            itemValue: "25.75 TKN",
+            inventoryPage: 3,
+            itemPosition: 12,
             timestamp: new Date().toISOString()
         };
 
         this.sellItemVerification.collectedData = testData;
         this.sellItemVerification.currentStep = 'navigate_inventory';
         this.sellItemVerification.isRunning = true;
-        this.sellItemVerification.saveState();
+
+        // Test URL encoding functionality
+        const encodedData = this.sellItemVerification.encodeDataToUrlParams(testData);
+        console.log("🔗 Test URL encoding:", encodedData);
+
+        // Test decoding (simulate what happens on Steam page)
+        if (encodedData) {
+            // Temporarily add to URL for testing
+            const testUrl = `https://steamcommunity.com/tradeoffer/new/?partner=123&token=abc&automation_data=${encodedData}`;
+            console.log("🔗 Test URL with data:", testUrl);
+        }
 
         console.log("Injected test data:", testData);
-        UIComponents.showNotification('Test data injected and state saved', 'success');
+        UIComponents.showNotification('Test data injected and URL encoding tested', 'success');
     }
 
-    handleDebugFullSequence() {
-        console.log("🔧 DEBUG: Running full CSGORoll sequence");
+    // Removed handleDebugFullSequence() - use individual debug buttons instead
 
+    checkForSteamPageAutomation() {
+        console.log('=== CHECKING FOR STEAM PAGE AUTOMATION ===');
+        console.log('🔍 Is Steam page:', this.sellItemVerification.isSteamPage());
+
+        // ONLY auto-start on Steam pages with URL data
         if (this.sellItemVerification.isSteamPage()) {
-            UIComponents.showNotification('Full sequence is for CSGORoll page only', 'warning');
-            return;
-        }
+            console.log('✅ Steam page with URL data found - auto-starting automation');
 
-        // Step 1: Extract data
-        const modal = document.querySelector('mat-dialog-container');
-        if (!modal) {
-            UIComponents.showNotification('Open a trade dialog first, then try again', 'warning');
-            return;
-        }
-
-        console.log("Step 1: Extracting data...");
-        this.sellItemVerification.step2_ExtractItemData();
-
-        // Check if extraction worked
-        if (!this.sellItemVerification.collectedData || Object.keys(this.sellItemVerification.collectedData).length === 0) {
-            UIComponents.showNotification('Data extraction failed - check console for details', 'error');
-            return;
-        }
-
-        // Step 2: After a delay, trigger send items
-        setTimeout(() => {
-            console.log("Step 2: Triggering send items...");
-            const sendButton = this.sellItemVerification.findButtonByText('Send Items Now');
-
-            if (!sendButton) {
-                UIComponents.showNotification('Send Items Now button not found', 'error');
-                return;
+            // Ensure we're on the correct step for Steam page
+            if (this.sellItemVerification.currentStep !== 'navigate_inventory') {
+                console.log('🔧 Setting step to navigate_inventory for Steam page');
+                this.sellItemVerification.currentStep = 'navigate_inventory';
             }
 
-            this.sellItemVerification.step2_SendItems();
-            UIComponents.showNotification('Full sequence complete - Steam page should now continue automatically', 'success');
-        }, 2000);
-
-        UIComponents.showNotification('Starting full sequence...', 'info');
-    }
-
-    checkAndContinueSellVerification() {
-        console.log('=== CHECKING SELL VERIFICATION STATE ===');
-        console.log('hasRestorableState:', this.sellItemVerification.hasRestorableState);
-
-        // Also check localStorage directly
-        const savedState = localStorage.getItem('sellItemVerificationState');
-        console.log('Raw localStorage state:', savedState);
-
-        if (savedState) {
-            try {
-                const parsedState = JSON.parse(savedState);
-                console.log('Parsed saved state:', parsedState);
-            } catch (e) {
-                console.error('Error parsing saved state:', e);
-            }
-        }
-
-        // Check if automation has restorable state
-        if (this.sellItemVerification.hasRestorableState) {
-            console.log('✅ Found restorable sell verification state, auto-continuing automation');
-
-            // Set appropriate step based on current page (only if not already set correctly)
-            if (this.sellItemVerification.isSteamPage()) {
-                console.log('✅ On Steam page - current step:', this.sellItemVerification.currentStep);
-                // Only override if we're in the wrong step
-                if (this.sellItemVerification.currentStep === 'wait_for_continue') {
-                    console.log('Correcting step from wait_for_continue to navigate_inventory');
-                    this.sellItemVerification.currentStep = 'navigate_inventory';
-                }
-            }
-
-            // Automatically start the automation manager with sell verification
+            // Automatically start the automation
             setTimeout(() => {
                 try {
-                    console.log('🚀 Starting automation manager...');
-                    console.log('Current automation step before start:', this.sellItemVerification.currentStep);
-                    console.log('Automation isRunning before start:', this.sellItemVerification.isRunning);
-
+                    console.log('🚀 Auto-starting sell verification on Steam page...');
                     this.automationManager.startAutomation('sell-item-verification');
-
-                    console.log('✅ Auto-started sell item verification from saved state');
-                    console.log('Current automation step after start:', this.sellItemVerification.currentStep);
-                    console.log('Automation isRunning after start:', this.sellItemVerification.isRunning);
-                    console.log('Automation manager isRunning:', this.automationManager.isRunning);
+                    console.log('✅ Auto-started sell item verification from URL data');
                 } catch (error) {
                     console.error('❌ Failed to auto-start sell verification:', error);
                 }
-            }, 2000); // Increased delay to ensure page is fully loaded
+            }, 2000);
         } else {
-            console.log('❌ No restorable state found');
+            console.log('🚫 Not auto-starting - either not Steam page or no URL data');
         }
     }
 

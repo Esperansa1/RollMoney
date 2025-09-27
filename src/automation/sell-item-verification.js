@@ -48,7 +48,16 @@ export class SellItemVerification {
             if (!urlState.collectedData || !urlState.collectedData.itemName) {
                 console.log('⚠️ Warning: On Steam page but missing critical item data');
             } else {
-                console.log('✅ Steam page has all required item data');
+                console.log('✅ Steam page has all required item data - restoring state');
+
+                // Restore the automation state
+                this.collectedData = urlState.collectedData;
+                this.currentStep = urlState.currentStep || 'navigate_inventory';
+
+                console.log('🔄 State restored from URL parameters:', {
+                    currentStep: this.currentStep,
+                    collectedData: this.collectedData
+                });
             }
         } else {
             console.log('🔍 No URL parameters found on Steam page');
@@ -156,8 +165,14 @@ export class SellItemVerification {
             console.log('🔄 Starting fresh automation from Yes Im ready');
         }
         else if(this.isSteamPage()){
-            this.currentStep = 'navigate_inventory';
-            console.log('🔄 Navigating Inventory');
+            // If we don't have collected data, start from navigation
+            if (!this.collectedData || Object.keys(this.collectedData).length === 0) {
+                this.currentStep = 'navigate_inventory';
+                console.log('🔄 Starting fresh on Steam - Navigating Inventory');
+            } else {
+                console.log('🔄 Using restored state - Current step:', this.currentStep);
+                console.log('🔄 Restored data:', this.collectedData);
+            }
         }
 
         this.startStepMonitoring();
@@ -165,7 +180,7 @@ export class SellItemVerification {
         console.log('📋 Current automation state:', {
             currentStep: this.currentStep,
             isRunning: this.isRunning,
-            hasCollectedData: Object.keys(this.collectedData).length > 0,
+            hasCollectedData: Object.keys(this.collectedData).length > 0
         });
     }
 
@@ -287,6 +302,7 @@ export class SellItemVerification {
                 }
                 break;
             case 'complete':
+                document.querySelector('button[mat-dialog-close]')?.click();
                 this.completeVerification();
                 break;
             default:

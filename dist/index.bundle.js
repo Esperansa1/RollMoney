@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "53cc45c3";
+  window.ROLLMONEY_VERSION = "ed821f32";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1220,7 +1220,13 @@ var RollMoney = (() => {
             if (!urlState.collectedData || !urlState.collectedData.itemName) {
               console.log("\u26A0\uFE0F Warning: On Steam page but missing critical item data");
             } else {
-              console.log("\u2705 Steam page has all required item data");
+              console.log("\u2705 Steam page has all required item data - restoring state");
+              this.collectedData = urlState.collectedData;
+              this.currentStep = urlState.currentStep || "navigate_inventory";
+              console.log("\u{1F504} State restored from URL parameters:", {
+                currentStep: this.currentStep,
+                collectedData: this.collectedData
+              });
             }
           } else {
             console.log("\u{1F50D} No URL parameters found on Steam page");
@@ -1309,8 +1315,13 @@ var RollMoney = (() => {
             this.currentStep = "waiting_for_trade_popup";
             console.log("\u{1F504} Starting fresh automation from Yes Im ready");
           } else if (this.isSteamPage()) {
-            this.currentStep = "navigate_inventory";
-            console.log("\u{1F504} Navigating Inventory");
+            if (!this.collectedData || Object.keys(this.collectedData).length === 0) {
+              this.currentStep = "navigate_inventory";
+              console.log("\u{1F504} Starting fresh on Steam - Navigating Inventory");
+            } else {
+              console.log("\u{1F504} Using restored state - Current step:", this.currentStep);
+              console.log("\u{1F504} Restored data:", this.collectedData);
+            }
           }
           this.startStepMonitoring();
           console.log("\u2705 SellItemVerification automation started");
@@ -1417,6 +1428,7 @@ var RollMoney = (() => {
               }
               break;
             case "complete":
+              document.querySelector("button[mat-dialog-close]")?.click();
               this.completeVerification();
               break;
             default:
