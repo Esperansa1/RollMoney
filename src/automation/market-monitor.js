@@ -12,7 +12,7 @@ export class MarketMonitor {
         this.priority = 2; // Higher priority than withdrawal automation
         this.interval = 2000; // Check every 2 seconds
         this.settings = {
-            priceThreshold: 0.05, // 5% price change threshold
+            priceThreshold: this.loadPriceThreshold(), // Load from localStorage
             trackDuration: 300000, // 5 minutes of price tracking
             enabled: true,
             alertOnDrop: true,
@@ -189,5 +189,16 @@ export class MarketMonitor {
             isRunning: this.isRunning,
             settings: this.settings
         };
+    }
+
+    loadPriceThreshold() {
+        const stored = localStorage.getItem('market-monitor-price-threshold');
+        return stored ? parseFloat(stored) : 0.05; // Default to 5%
+    }
+
+    updatePriceThreshold(newThreshold) {
+        this.settings.priceThreshold = newThreshold;
+        localStorage.setItem('market-monitor-price-threshold', newThreshold.toString());
+        console.log(`Price threshold updated to ${(newThreshold * 100).toFixed(1)}%`);
     }
 }

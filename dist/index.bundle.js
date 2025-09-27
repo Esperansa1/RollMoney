@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "e59611dc";
+  window.ROLLMONEY_VERSION = "386758bc";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1366,8 +1366,8 @@ var RollMoney = (() => {
           this.priority = 2;
           this.interval = 2e3;
           this.settings = {
-            priceThreshold: 0.05,
-            // 5% price change threshold
+            priceThreshold: this.loadPriceThreshold(),
+            // Load from localStorage
             trackDuration: 3e5,
             // 5 minutes of price tracking
             enabled: true,
@@ -1505,6 +1505,15 @@ var RollMoney = (() => {
             isRunning: this.isRunning,
             settings: this.settings
           };
+        }
+        loadPriceThreshold() {
+          const stored = localStorage.getItem("market-monitor-price-threshold");
+          return stored ? parseFloat(stored) : 0.05;
+        }
+        updatePriceThreshold(newThreshold) {
+          this.settings.priceThreshold = newThreshold;
+          localStorage.setItem("market-monitor-price-threshold", newThreshold.toString());
+          console.log(`Price threshold updated to ${(newThreshold * 100).toFixed(1)}%`);
         }
       };
     }
@@ -2514,6 +2523,10 @@ var RollMoney = (() => {
             settings: automation.settings
           } : null;
         }
+        getAutomation(id) {
+          const automation = this.automations.get(id);
+          return automation ? automation.instance : null;
+        }
         getAllAutomations() {
           return Array.from(this.automations.values()).map((auto) => ({
             id: auto.id,
@@ -3085,7 +3098,8 @@ var RollMoney = (() => {
           const buttonGroup = DOMUtils.createElement("div", {
             display: "flex",
             gap: Theme.spacing.sm,
-            flexWrap: "wrap"
+            flexWrap: "wrap",
+            marginBottom: Theme.spacing.md
           });
           const startBtn = UIComponents.createButton("Start Monitoring", "success", "md", () => {
             this.automationManager.startAutomation("market-monitor");
@@ -3095,8 +3109,66 @@ var RollMoney = (() => {
           });
           buttonGroup.appendChild(startBtn);
           buttonGroup.appendChild(stopBtn);
+          const settingsContainer = DOMUtils.createElement("div", {
+            display: "flex",
+            flexDirection: "column",
+            gap: Theme.spacing.sm,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surface,
+            borderRadius: Theme.borderRadius.sm,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const settingsTitle = UIComponents.createLabel("Settings", {
+            fontSize: Theme.typography.fontSize.md,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.xs
+          });
+          const thresholdContainer = DOMUtils.createElement("div", {
+            display: "flex",
+            alignItems: "center",
+            gap: Theme.spacing.sm
+          });
+          const thresholdLabel = UIComponents.createLabel("Price Threshold:", {
+            marginBottom: "0",
+            fontSize: Theme.typography.fontSize.sm,
+            minWidth: "100px"
+          });
+          const thresholdInput = UIComponents.createInput("number", {
+            width: "80px"
+          }, {
+            min: "0.01",
+            max: "1.0",
+            step: "0.01",
+            value: "0.05",
+            id: "price-threshold-input"
+          });
+          const thresholdPercent = UIComponents.createLabel("%", {
+            marginBottom: "0",
+            fontSize: Theme.typography.fontSize.sm
+          });
+          const applyBtn = UIComponents.createButton("Apply", "primary", "sm", () => {
+            const newThreshold = parseFloat(thresholdInput.value) / 100;
+            const marketMonitor = this.automationManager.getAutomation("market-monitor");
+            if (marketMonitor && marketMonitor.updatePriceThreshold) {
+              marketMonitor.updatePriceThreshold(newThreshold);
+              const originalText = applyBtn.textContent;
+              applyBtn.textContent = "\u2713 Applied";
+              applyBtn.style.backgroundColor = Theme.colors.success;
+              setTimeout(() => {
+                applyBtn.textContent = originalText;
+                applyBtn.style.backgroundColor = "";
+              }, 1500);
+            }
+          });
+          thresholdContainer.appendChild(thresholdLabel);
+          thresholdContainer.appendChild(thresholdInput);
+          thresholdContainer.appendChild(thresholdPercent);
+          thresholdContainer.appendChild(applyBtn);
+          settingsContainer.appendChild(settingsTitle);
+          settingsContainer.appendChild(thresholdContainer);
           panel.appendChild(title);
           panel.appendChild(buttonGroup);
+          panel.appendChild(settingsContainer);
           return panel;
         }
         createPriceAlerts() {
@@ -3245,6 +3317,78 @@ var RollMoney = (() => {
           statusCard.appendChild(statusInfo);
           statusCard.appendChild(quickControls);
           container.appendChild(statusCard);
+        }
+        updateMarketMonitorContent(container) {
+          const thresholdInput = container.querySelector("#price-threshold-input");
+          if (thresholdInput) {
+            const marketMonitor = this.automationManager.getAutomation("market-monitor");
+            if (marketMonitor) {
+              const currentThreshold = (marketMonitor.settings.priceThreshold * 100).toFixed(1);
+              if (thresholdInput.value !== currentThreshold) {
+                thresholdInput.value = currentThreshold;
+              }
+            }
+          }
+          const alertsList = container.querySelector("#price-alerts-list");
+          if (alertsList) {
+            this.updatePriceAlerts(alertsList);
+          }
+          const itemsList = container.querySelector("#monitored-items-list");
+          if (itemsList) {
+            this.updateMonitoredItems(itemsList);
+          }
+        }
+        updatePriceAlerts(container) {
+          const marketMonitor = this.automationManager.getAutomation("market-monitor");
+          if (!marketMonitor) {
+            container.innerHTML = '<div style="text-align: center; color: #666;">Market Monitor not available</div>';
+            return;
+          }
+          const alerts = marketMonitor.getRecentAlerts(10);
+          container.innerHTML = "";
+          if (alerts.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #666;">No recent alerts</div>';
+            return;
+          }
+          alerts.reverse().forEach((alert) => {
+            const alertItem = DOMUtils.createElement("div", {
+              padding: Theme.spacing.sm,
+              marginBottom: Theme.spacing.xs,
+              backgroundColor: alert.type === "price_increase" ? "#e8f5e8" : "#ffeee8",
+              borderLeft: `3px solid ${alert.type === "price_increase" ? Theme.colors.success : Theme.colors.warning}`,
+              borderRadius: Theme.borderRadius.sm,
+              fontSize: Theme.typography.fontSize.sm
+            });
+            const timeStr = new Date(alert.timestamp).toLocaleTimeString();
+            const changePercent = (Math.abs(alert.priceChange) * 100).toFixed(1);
+            const direction = alert.type === "price_increase" ? "\u2197\uFE0F" : "\u2198\uFE0F";
+            alertItem.innerHTML = `
+                <div style="font-weight: bold;">${direction} ${alert.item.name}</div>
+                <div>${changePercent}% price change at ${timeStr}</div>
+            `;
+            container.appendChild(alertItem);
+          });
+        }
+        updateMonitoredItems(container) {
+          const marketMonitor = this.automationManager.getAutomation("market-monitor");
+          if (!marketMonitor) {
+            container.innerHTML = '<div style="text-align: center; color: #666;">Market Monitor not available</div>';
+            return;
+          }
+          const stats = marketMonitor.getStats();
+          container.innerHTML = "";
+          const statsInfo = DOMUtils.createElement("div", {
+            textAlign: "center",
+            padding: Theme.spacing.md,
+            color: Theme.colors.onSurface
+          });
+          statsInfo.innerHTML = `
+            <div style="font-size: ${Theme.typography.fontSize.xl}; font-weight: bold; margin-bottom: ${Theme.spacing.xs};">
+                ${stats.monitoredItems}
+            </div>
+            <div>Items being monitored</div>
+        `;
+          container.appendChild(statsInfo);
         }
         getStatusColor(status) {
           const colors = {

@@ -247,6 +247,11 @@ export class AutomationManager {
         } : null;
     }
 
+    getAutomation(id) {
+        const automation = this.automations.get(id);
+        return automation ? automation.instance : null;
+    }
+
     getAllAutomations() {
         return Array.from(this.automations.values()).map(auto => ({
             id: auto.id,
