@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "386758bc";
+  window.ROLLMONEY_VERSION = "ed6eeb26";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -303,12 +303,110 @@ var RollMoney = (() => {
     }
   });
 
+  // src/utils/cookie-utils.js
+  var CookieUtils;
+  var init_cookie_utils = __esm({
+    "src/utils/cookie-utils.js"() {
+      CookieUtils = class {
+        static setCookie(name, value, days = 365) {
+          let expires = "";
+          if (days) {
+            const date = /* @__PURE__ */ new Date();
+            date.setTime(date.getTime() + days * 24 * 60 * 60 * 1e3);
+            expires = "; expires=" + date.toUTCString();
+          }
+          const cookieString = name + "=" + encodeURIComponent(value) + expires;
+          document.cookie = cookieString;
+          console.log("Setting cookie:", cookieString);
+        }
+        static getCookie(name) {
+          const nameEQ = name + "=";
+          const ca = document.cookie.split(";");
+          console.log("Getting cookie:", name, "from document.cookie:", document.cookie);
+          for (let i = 0; i < ca.length; i++) {
+            let c = ca[i];
+            while (c.charAt(0) === " ") c = c.substring(1, c.length);
+            if (c.indexOf(nameEQ) === 0) {
+              const value = decodeURIComponent(c.substring(nameEQ.length, c.length));
+              console.log("Found cookie value:", value);
+              return value;
+            }
+          }
+          console.log("Cookie not found:", name);
+          return null;
+        }
+        static deleteCookie(name) {
+          document.cookie = name + "=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+        }
+        static setJsonCookie(name, value, days = 365) {
+          try {
+            const jsonString = JSON.stringify(value);
+            try {
+              localStorage.setItem(name, jsonString);
+              console.log("Saved to localStorage:", name, jsonString);
+              return true;
+            } catch (localStorageError) {
+              console.warn("localStorage failed, trying cookies:", localStorageError);
+              this.setCookie(name, jsonString, days);
+              return true;
+            }
+          } catch (error) {
+            console.error("Error setting JSON data:", error);
+            return false;
+          }
+        }
+        static getJsonCookie(name) {
+          try {
+            try {
+              const localValue = localStorage.getItem(name);
+              if (localValue) {
+                console.log("Retrieved from localStorage:", name, localValue);
+                return JSON.parse(localValue);
+              }
+            } catch (localStorageError) {
+              console.warn("localStorage failed, trying cookies:", localStorageError);
+            }
+            const cookieValue = this.getCookie(name);
+            if (cookieValue) {
+              console.log("Retrieved from cookies:", name, cookieValue);
+              return JSON.parse(cookieValue);
+            }
+            return null;
+          } catch (error) {
+            console.error("Error parsing JSON data:", error);
+            return null;
+          }
+        }
+        static hasCookie(name) {
+          return this.getCookie(name) !== null;
+        }
+        static listCookies() {
+          const cookies = {};
+          const ca = document.cookie.split(";");
+          for (let i = 0; i < ca.length; i++) {
+            const c = ca[i].trim();
+            if (c) {
+              const eqPos = c.indexOf("=");
+              if (eqPos > 0) {
+                const name = c.substring(0, eqPos);
+                const value = decodeURIComponent(c.substring(eqPos + 1));
+                cookies[name] = value;
+              }
+            }
+          }
+          return cookies;
+        }
+      };
+    }
+  });
+
   // src/components/ui-components.js
   var UIComponents;
   var init_ui_components = __esm({
     "src/components/ui-components.js"() {
       init_dom_utils();
       init_theme();
+      init_cookie_utils();
       UIComponents = class {
         static createOverlay() {
           return DOMUtils.createElement("div", {
@@ -493,33 +591,131 @@ var RollMoney = (() => {
           });
         }
         static createJsonConfigSection(onLoad) {
-          const label = this.createLabel("Custom Filter Configuration");
-          const textarea = this.createTextarea(
+          const label = this.createLabel("Filter Configuration");
+          const currentLabel = this.createLabel("Current Active Filter:", {
+            fontSize: Theme.typography.fontSize.xs,
+            marginBottom: Theme.spacing.xs
+          });
+          const currentTextarea = this.createTextarea(
             {
-              height: "180px",
-              maxHeight: "180px",
-              overflow: "auto"
+              height: "80px",
+              maxHeight: "80px",
+              overflow: "auto",
+              fontSize: Theme.typography.fontSize.xs,
+              lineHeight: "1.3",
+              backgroundColor: Theme.colors.surfaceVariant,
+              color: Theme.colors.onSurface,
+              border: `1px solid ${Theme.colors.border}`,
+              cursor: "default"
             },
             {
-              id: "custom-filter-json",
-              placeholder: `Enter JSON configuration:
-[
-  {"skin": "Bayonet", "type": ["Fade", "Marble Fade"]},
-  {"type": "Bowie Knife", "skin": ["Fade", "Marble Fade"]}
-]`
+              id: "current-filter-display",
+              placeholder: "No filter currently active",
+              readonly: true
             }
           );
-          const loadButton = this.createButton("Load Filter", "primary", "sm", () => {
+          const inputLabel = this.createLabel("New Filter JSON:", {
+            fontSize: Theme.typography.fontSize.xs,
+            marginBottom: Theme.spacing.xs,
+            marginTop: Theme.spacing.sm
+          });
+          const inputTextarea = this.createTextarea(
+            {
+              height: "80px",
+              maxHeight: "80px",
+              overflow: "auto",
+              fontSize: Theme.typography.fontSize.xs,
+              lineHeight: "1.3"
+            },
+            {
+              id: "new-filter-input",
+              placeholder: `[{"skin": "Bayonet", "type": ["Fade", "Marble Fade"]}]`
+            }
+          );
+          const savedFilter = CookieUtils.getJsonCookie("market-filter-config");
+          console.log("Loading saved filter from cookies:", savedFilter);
+          if (savedFilter) {
+            setTimeout(() => {
+              currentTextarea.value = JSON.stringify(savedFilter, null, 2);
+              console.log("Populated current filter display with:", savedFilter);
+            }, 50);
+          }
+          let saveTimeout;
+          inputTextarea.addEventListener("input", () => {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+              try {
+                const jsonInput = inputTextarea.value.trim();
+                if (jsonInput) {
+                  const config = JSON.parse(jsonInput);
+                  console.log("Filter JSON validated successfully");
+                }
+              } catch (error) {
+                console.log("Invalid JSON in input");
+              }
+            }, 500);
+          });
+          const loadButton = this.createButton("Apply Filter", "primary", "sm", () => {
             try {
-              const jsonInput = textarea.value.trim();
+              const jsonInput = inputTextarea.value.trim();
               const config = jsonInput ? JSON.parse(jsonInput) : [];
+              console.log("Applying filter config:", config);
+              currentTextarea.value = jsonInput ? JSON.stringify(config, null, 2) : "";
+              if (jsonInput) {
+                const saveResult = CookieUtils.setJsonCookie("market-filter-config", config);
+                console.log("Cookie save result:", saveResult);
+                console.log("Saved config to cookies:", config);
+              } else {
+                this.deleteFilterStorage("market-filter-config");
+                console.log("Deleted filter storage");
+              }
+              const savedConfig = CookieUtils.getJsonCookie("market-filter-config");
+              console.log("Verified saved config:", savedConfig);
               if (onLoad) onLoad(config);
-              this.showNotification("Filter configuration loaded!", "success");
+              this.showNotification("Filter applied successfully!", "success");
+              inputTextarea.value = "";
             } catch (error) {
+              console.error("Error applying filter:", error);
               this.showNotification("Invalid JSON: " + error.message, "error");
             }
           });
-          return { label, textarea, loadButton };
+          const clearButton = this.createButton("Clear All", "secondary", "sm", () => {
+            inputTextarea.value = "";
+            currentTextarea.value = "";
+            this.deleteFilterStorage("market-filter-config");
+            if (onLoad) onLoad([]);
+            this.showNotification("All filters cleared!", "info");
+          });
+          if (savedFilter && onLoad) {
+            setTimeout(() => {
+              console.log("Auto-loading saved filter via onLoad callback:", savedFilter);
+              onLoad(savedFilter);
+              this.showNotification("Filter configuration loaded from cookies!", "info");
+            }, 200);
+          }
+          return {
+            label,
+            currentLabel,
+            currentTextarea,
+            inputLabel,
+            inputTextarea,
+            loadButton,
+            clearButton
+          };
+        }
+        static deleteFilterStorage(name) {
+          try {
+            localStorage.removeItem(name);
+            console.log("Removed from localStorage:", name);
+          } catch (error) {
+            console.warn("Could not remove from localStorage:", error);
+          }
+          try {
+            CookieUtils.deleteCookie(name);
+            console.log("Removed from cookies:", name);
+          } catch (error) {
+            console.warn("Could not remove from cookies:", error);
+          }
         }
         static createResultsArea() {
           const label = this.createLabel("Scraping Results");
@@ -3535,25 +3731,66 @@ var RollMoney = (() => {
         }
         createConfigurationTab() {
           const container = DOMUtils.createElement("div", {
-            padding: Theme.spacing.md,
+            padding: Theme.spacing.sm,
             height: "100%",
-            overflow: "auto"
-          });
-          const jsonConfig = UIComponents.createJsonConfigSection((config) => {
-            this.itemFilter.setCustomFilterConfig(config);
+            overflow: "auto",
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: Theme.spacing.md,
+            gridTemplateRows: "auto auto auto"
           });
           const configSection = DOMUtils.createElement("div", {
-            marginBottom: Theme.spacing.lg,
-            padding: Theme.spacing.md,
+            padding: Theme.spacing.sm,
             backgroundColor: Theme.colors.surfaceVariant,
             borderRadius: Theme.borderRadius.md,
-            border: `1px solid ${Theme.colors.border}`
+            border: `1px solid ${Theme.colors.border}`,
+            gridColumn: "1 / 3"
           });
-          configSection.appendChild(jsonConfig.label);
-          configSection.appendChild(jsonConfig.textarea);
-          configSection.appendChild(jsonConfig.loadButton);
+          const jsonConfig = UIComponents.createJsonConfigSection((config) => {
+            console.log("Market scraper received filter config:", config);
+            this.itemFilter.setCustomFilterConfig(config);
+            this.updateCurrentFilterDisplay(config);
+            console.log("Filter applied to itemFilter and display updated");
+          });
+          const filterHeader = DOMUtils.createElement("div", {
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginBottom: Theme.spacing.xs
+          });
+          const compactLabel = UIComponents.createLabel("Filter Configuration", {
+            fontSize: Theme.typography.fontSize.md,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: "0"
+          });
+          const buttonContainer = DOMUtils.createElement("div", {
+            display: "flex",
+            gap: Theme.spacing.xs
+          });
+          buttonContainer.appendChild(jsonConfig.loadButton);
+          buttonContainer.appendChild(jsonConfig.clearButton);
+          filterHeader.appendChild(compactLabel);
+          filterHeader.appendChild(buttonContainer);
+          const textboxContainer = DOMUtils.createElement("div", {
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            gap: Theme.spacing.sm,
+            marginTop: Theme.spacing.xs
+          });
+          const currentFilterColumn = DOMUtils.createElement("div");
+          currentFilterColumn.appendChild(jsonConfig.currentLabel);
+          currentFilterColumn.appendChild(jsonConfig.currentTextarea);
+          const inputFilterColumn = DOMUtils.createElement("div");
+          inputFilterColumn.appendChild(jsonConfig.inputLabel);
+          inputFilterColumn.appendChild(jsonConfig.inputTextarea);
+          textboxContainer.appendChild(currentFilterColumn);
+          textboxContainer.appendChild(inputFilterColumn);
+          configSection.appendChild(filterHeader);
+          configSection.appendChild(textboxContainer);
           const controlsSection = this.createSniperControls();
+          controlsSection.style.gridColumn = "1";
           const statusSection = this.createSniperStatus();
+          statusSection.style.gridColumn = "2";
           container.appendChild(configSection);
           container.appendChild(controlsSection);
           container.appendChild(statusSection);
@@ -3561,51 +3798,107 @@ var RollMoney = (() => {
         }
         createSniperControls() {
           const section = DOMUtils.createElement("div", {
-            marginBottom: Theme.spacing.lg,
-            padding: Theme.spacing.md,
+            padding: Theme.spacing.sm,
             backgroundColor: Theme.colors.surface,
             borderRadius: Theme.borderRadius.md,
             border: `1px solid ${Theme.colors.border}`
           });
-          const title = UIComponents.createLabel("Market Sniper Controls", {
-            fontSize: Theme.typography.fontSize.lg,
+          const title = UIComponents.createLabel("Sniper Controls", {
+            fontSize: Theme.typography.fontSize.md,
             fontWeight: Theme.typography.fontWeight.bold,
-            marginBottom: Theme.spacing.md
+            marginBottom: Theme.spacing.sm
           });
           const buttonContainer = DOMUtils.createElement("div", {
             display: "flex",
-            gap: Theme.spacing.md,
+            gap: Theme.spacing.sm,
             justifyContent: "center",
-            marginBottom: Theme.spacing.md
+            marginBottom: Theme.spacing.sm
           });
-          const startButton = UIComponents.createButton("Start Sniper", "success", "lg", () => {
+          const startButton = UIComponents.createButton("Start Sniper", "success", "md", () => {
             this.handleStartSniper();
           });
-          const stopButton = UIComponents.createButton("Stop Sniper", "error", "lg", () => {
+          const stopButton = UIComponents.createButton("Stop Sniper", "error", "md", () => {
             this.handleStopSniper();
           });
           buttonContainer.appendChild(startButton);
           buttonContainer.appendChild(stopButton);
+          const settingsContainer = DOMUtils.createElement("div", {
+            padding: Theme.spacing.sm,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.sm,
+            border: `1px solid ${Theme.colors.border}`,
+            marginTop: Theme.spacing.sm
+          });
+          const settingsTitle = UIComponents.createLabel("Monitor Settings", {
+            fontSize: Theme.typography.fontSize.sm,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.xs
+          });
+          const thresholdContainer = DOMUtils.createElement("div", {
+            display: "flex",
+            alignItems: "center",
+            gap: Theme.spacing.sm
+          });
+          const thresholdLabel = UIComponents.createLabel("Alert Threshold:", {
+            marginBottom: "0",
+            fontSize: Theme.typography.fontSize.xs,
+            minWidth: "90px"
+          });
+          const thresholdInput = UIComponents.createInput("number", {
+            width: "60px",
+            fontSize: Theme.typography.fontSize.xs
+          }, {
+            min: "0.1",
+            max: "100",
+            step: "0.1",
+            value: "5.0",
+            id: "sniper-price-threshold-input"
+          });
+          const thresholdPercent = UIComponents.createLabel("%", {
+            marginBottom: "0",
+            fontSize: Theme.typography.fontSize.sm
+          });
+          const applyBtn = UIComponents.createButton("Apply", "primary", "sm", () => {
+            const newThreshold = parseFloat(thresholdInput.value) / 100;
+            const marketMonitor = this.automationManager.getAutomation("market-monitor");
+            if (marketMonitor && marketMonitor.updatePriceThreshold) {
+              marketMonitor.updatePriceThreshold(newThreshold);
+              const originalText = applyBtn.textContent;
+              applyBtn.textContent = "\u2713 Applied";
+              applyBtn.style.backgroundColor = Theme.colors.success;
+              setTimeout(() => {
+                applyBtn.textContent = originalText;
+                applyBtn.style.backgroundColor = "";
+              }, 1500);
+            }
+          });
+          thresholdContainer.appendChild(thresholdLabel);
+          thresholdContainer.appendChild(thresholdInput);
+          thresholdContainer.appendChild(thresholdPercent);
+          thresholdContainer.appendChild(applyBtn);
+          settingsContainer.appendChild(settingsTitle);
+          settingsContainer.appendChild(thresholdContainer);
           section.appendChild(title);
           section.appendChild(buttonContainer);
+          section.appendChild(settingsContainer);
           return section;
         }
         createSniperStatus() {
           const section = DOMUtils.createElement("div", {
-            padding: Theme.spacing.md,
+            padding: Theme.spacing.sm,
             backgroundColor: Theme.colors.surface,
             borderRadius: Theme.borderRadius.md,
             border: `1px solid ${Theme.colors.border}`
           });
-          const title = UIComponents.createLabel("Sniper Status", {
-            fontSize: Theme.typography.fontSize.lg,
+          const title = UIComponents.createLabel("Status", {
+            fontSize: Theme.typography.fontSize.md,
             fontWeight: Theme.typography.fontWeight.bold,
-            marginBottom: Theme.spacing.md
+            marginBottom: Theme.spacing.sm
           });
           const statusGrid = DOMUtils.createElement("div", {
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-            gap: Theme.spacing.sm
+            gridTemplateColumns: "repeat(auto-fit, minmax(100px, 1fr))",
+            gap: Theme.spacing.xs
           });
           statusGrid.id = "sniper-status-grid";
           section.appendChild(title);
@@ -3644,6 +3937,16 @@ var RollMoney = (() => {
         updateSniperStatus() {
           const statusGrid = document.getElementById("sniper-status-grid");
           if (!statusGrid) return;
+          const thresholdInput = document.getElementById("sniper-price-threshold-input");
+          if (thresholdInput) {
+            const marketMonitor = this.automationManager.getAutomation("market-monitor");
+            if (marketMonitor) {
+              const currentThreshold = (marketMonitor.settings.priceThreshold * 100).toFixed(1);
+              if (thresholdInput.value !== currentThreshold) {
+                thresholdInput.value = currentThreshold;
+              }
+            }
+          }
           const stats = this.automationManager.getStats();
           const withdrawalStatus = this.automationManager.getAutomationStatus("withdrawal");
           const monitorStatus = this.automationManager.getAutomationStatus("market-monitor");
@@ -3698,6 +4001,17 @@ var RollMoney = (() => {
           if (hours > 0) return `${hours}h ${minutes % 60}m`;
           if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
           return `${seconds}s`;
+        }
+        updateCurrentFilterDisplay(config) {
+          const currentDisplay = document.getElementById("current-filter-display");
+          if (currentDisplay) {
+            if (config && config.length > 0) {
+              currentDisplay.value = JSON.stringify(config, null, 2);
+            } else {
+              currentDisplay.value = "";
+              currentDisplay.placeholder = "No filter currently active";
+            }
+          }
         }
         createSellVerificationTab() {
           const container = DOMUtils.createElement("div", {

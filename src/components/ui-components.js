@@ -1,5 +1,6 @@
 import { DOMUtils } from '../utils/dom-utils.js';
 import { Theme, getButtonStyles, getInputStyles, getOverlayStyles } from '../theme/theme.js';
+import { CookieUtils } from '../utils/cookie-utils.js';
 
 export class UIComponents {
     static createOverlay() {
@@ -213,36 +214,162 @@ export class UIComponents {
     }
 
     static createJsonConfigSection(onLoad) {
-        const label = this.createLabel('Custom Filter Configuration');
+        const label = this.createLabel('Filter Configuration');
 
-        const textarea = this.createTextarea(
+        // Current filter display (read-only)
+        const currentLabel = this.createLabel('Current Active Filter:', {
+            fontSize: Theme.typography.fontSize.xs,
+            marginBottom: Theme.spacing.xs
+        });
+
+        const currentTextarea = this.createTextarea(
             {
-                height: '180px',
-                maxHeight: '180px',
-                overflow: 'auto'
+                height: '80px',
+                maxHeight: '80px',
+                overflow: 'auto',
+                fontSize: Theme.typography.fontSize.xs,
+                lineHeight: '1.3',
+                backgroundColor: Theme.colors.surfaceVariant,
+                color: Theme.colors.onSurface,
+                border: `1px solid ${Theme.colors.border}`,
+                cursor: 'default'
             },
             {
-                id: 'custom-filter-json',
-                placeholder: `Enter JSON configuration:
-[
-  {"skin": "Bayonet", "type": ["Fade", "Marble Fade"]},
-  {"type": "Bowie Knife", "skin": ["Fade", "Marble Fade"]}
-]`
+                id: 'current-filter-display',
+                placeholder: 'No filter currently active',
+                readonly: true
             }
         );
 
-        const loadButton = this.createButton('Load Filter', 'primary', 'sm', () => {
+        // New filter input
+        const inputLabel = this.createLabel('New Filter JSON:', {
+            fontSize: Theme.typography.fontSize.xs,
+            marginBottom: Theme.spacing.xs,
+            marginTop: Theme.spacing.sm
+        });
+
+        const inputTextarea = this.createTextarea(
+            {
+                height: '80px',
+                maxHeight: '80px',
+                overflow: 'auto',
+                fontSize: Theme.typography.fontSize.xs,
+                lineHeight: '1.3'
+            },
+            {
+                id: 'new-filter-input',
+                placeholder: `[{"skin": "Bayonet", "type": ["Fade", "Marble Fade"]}]`
+            }
+        );
+
+        // Auto-load saved filter from cookies on initialization
+        const savedFilter = CookieUtils.getJsonCookie('market-filter-config');
+        console.log('Loading saved filter from cookies:', savedFilter);
+        if (savedFilter) {
+            // Use setTimeout to ensure DOM is ready
+            setTimeout(() => {
+                currentTextarea.value = JSON.stringify(savedFilter, null, 2);
+                console.log('Populated current filter display with:', savedFilter);
+            }, 50);
+        }
+
+        // Auto-save on input changes (debounced) - only for new filter input
+        let saveTimeout;
+        inputTextarea.addEventListener('input', () => {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                try {
+                    const jsonInput = inputTextarea.value.trim();
+                    if (jsonInput) {
+                        const config = JSON.parse(jsonInput);
+                        // Don't auto-save to cookies, only validate
+                        console.log('Filter JSON validated successfully');
+                    }
+                } catch (error) {
+                    console.log('Invalid JSON in input');
+                }
+            }, 500);
+        });
+
+        const loadButton = this.createButton('Apply Filter', 'primary', 'sm', () => {
             try {
-                const jsonInput = textarea.value.trim();
+                const jsonInput = inputTextarea.value.trim();
                 const config = jsonInput ? JSON.parse(jsonInput) : [];
+
+                console.log('Applying filter config:', config);
+
+                // Update current filter display
+                currentTextarea.value = jsonInput ? JSON.stringify(config, null, 2) : '';
+
+                // Save to cookies when manually loaded
+                if (jsonInput) {
+                    const saveResult = CookieUtils.setJsonCookie('market-filter-config', config);
+                    console.log('Cookie save result:', saveResult);
+                    console.log('Saved config to cookies:', config);
+                } else {
+                    this.deleteFilterStorage('market-filter-config');
+                    console.log('Deleted filter storage');
+                }
+
+                // Verify cookie was saved
+                const savedConfig = CookieUtils.getJsonCookie('market-filter-config');
+                console.log('Verified saved config:', savedConfig);
+
                 if (onLoad) onLoad(config);
-                this.showNotification('Filter configuration loaded!', 'success');
+                this.showNotification('Filter applied successfully!', 'success');
+
+                // Clear the input after applying
+                inputTextarea.value = '';
             } catch (error) {
+                console.error('Error applying filter:', error);
                 this.showNotification('Invalid JSON: ' + error.message, 'error');
             }
         });
 
-        return { label, textarea, loadButton };
+        // Add clear button
+        const clearButton = this.createButton('Clear All', 'secondary', 'sm', () => {
+            inputTextarea.value = '';
+            currentTextarea.value = '';
+            this.deleteFilterStorage('market-filter-config');
+            if (onLoad) onLoad([]);
+            this.showNotification('All filters cleared!', 'info');
+        });
+
+        // Auto-load the saved filter on page load
+        if (savedFilter && onLoad) {
+            setTimeout(() => {
+                console.log('Auto-loading saved filter via onLoad callback:', savedFilter);
+                onLoad(savedFilter);
+                this.showNotification('Filter configuration loaded from cookies!', 'info');
+            }, 200);
+        }
+
+        return {
+            label,
+            currentLabel,
+            currentTextarea,
+            inputLabel,
+            inputTextarea,
+            loadButton,
+            clearButton
+        };
+    }
+
+    static deleteFilterStorage(name) {
+        // Delete from both localStorage and cookies
+        try {
+            localStorage.removeItem(name);
+            console.log('Removed from localStorage:', name);
+        } catch (error) {
+            console.warn('Could not remove from localStorage:', error);
+        }
+
+        try {
+            CookieUtils.deleteCookie(name);
+            console.log('Removed from cookies:', name);
+        } catch (error) {
+            console.warn('Could not remove from cookies:', error);
+        }
     }
 
     static createResultsArea() {

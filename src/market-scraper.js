@@ -129,33 +129,87 @@ export class MarketItemScraper {
 
     createConfigurationTab() {
         const container = DOMUtils.createElement('div', {
-            padding: Theme.spacing.md,
+            padding: Theme.spacing.sm,
             height: '100%',
-            overflow: 'auto'
+            overflow: 'auto',
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: Theme.spacing.md,
+            gridTemplateRows: 'auto auto auto'
         });
 
-        // Filter Configuration Section
-        const jsonConfig = UIComponents.createJsonConfigSection((config) => {
-            this.itemFilter.setCustomFilterConfig(config);
-        });
-
+        // Filter Configuration Section - more compact
         const configSection = DOMUtils.createElement('div', {
-            marginBottom: Theme.spacing.lg,
-            padding: Theme.spacing.md,
+            padding: Theme.spacing.sm,
             backgroundColor: Theme.colors.surfaceVariant,
             borderRadius: Theme.borderRadius.md,
-            border: `1px solid ${Theme.colors.border}`
+            border: `1px solid ${Theme.colors.border}`,
+            gridColumn: '1 / 3'
         });
 
-        configSection.appendChild(jsonConfig.label);
-        configSection.appendChild(jsonConfig.textarea);
-        configSection.appendChild(jsonConfig.loadButton);
+        const jsonConfig = UIComponents.createJsonConfigSection((config) => {
+            console.log('Market scraper received filter config:', config);
+            this.itemFilter.setCustomFilterConfig(config);
+            this.updateCurrentFilterDisplay(config);
+            console.log('Filter applied to itemFilter and display updated');
+        });
 
-        // Market Sniper Controls Section
+        // Compact filter layout with dual textboxes
+        const filterHeader = DOMUtils.createElement('div', {
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: Theme.spacing.xs
+        });
+
+        const compactLabel = UIComponents.createLabel('Filter Configuration', {
+            fontSize: Theme.typography.fontSize.md,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: '0'
+        });
+
+        const buttonContainer = DOMUtils.createElement('div', {
+            display: 'flex',
+            gap: Theme.spacing.xs
+        });
+
+        buttonContainer.appendChild(jsonConfig.loadButton);
+        buttonContainer.appendChild(jsonConfig.clearButton);
+
+        filterHeader.appendChild(compactLabel);
+        filterHeader.appendChild(buttonContainer);
+
+        // Create a grid layout for the two textboxes
+        const textboxContainer = DOMUtils.createElement('div', {
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: Theme.spacing.sm,
+            marginTop: Theme.spacing.xs
+        });
+
+        // Left column - Current filter
+        const currentFilterColumn = DOMUtils.createElement('div');
+        currentFilterColumn.appendChild(jsonConfig.currentLabel);
+        currentFilterColumn.appendChild(jsonConfig.currentTextarea);
+
+        // Right column - New filter input
+        const inputFilterColumn = DOMUtils.createElement('div');
+        inputFilterColumn.appendChild(jsonConfig.inputLabel);
+        inputFilterColumn.appendChild(jsonConfig.inputTextarea);
+
+        textboxContainer.appendChild(currentFilterColumn);
+        textboxContainer.appendChild(inputFilterColumn);
+
+        configSection.appendChild(filterHeader);
+        configSection.appendChild(textboxContainer);
+
+        // Market Sniper Controls Section - left column
         const controlsSection = this.createSniperControls();
+        controlsSection.style.gridColumn = '1';
 
-        // Status Section
+        // Status Section - right column
         const statusSection = this.createSniperStatus();
+        statusSection.style.gridColumn = '2';
 
         container.appendChild(configSection);
         container.appendChild(controlsSection);
@@ -166,61 +220,129 @@ export class MarketItemScraper {
 
     createSniperControls() {
         const section = DOMUtils.createElement('div', {
-            marginBottom: Theme.spacing.lg,
-            padding: Theme.spacing.md,
+            padding: Theme.spacing.sm,
             backgroundColor: Theme.colors.surface,
             borderRadius: Theme.borderRadius.md,
             border: `1px solid ${Theme.colors.border}`
         });
 
-        const title = UIComponents.createLabel('Market Sniper Controls', {
-            fontSize: Theme.typography.fontSize.lg,
+        const title = UIComponents.createLabel('Sniper Controls', {
+            fontSize: Theme.typography.fontSize.md,
             fontWeight: Theme.typography.fontWeight.bold,
-            marginBottom: Theme.spacing.md
+            marginBottom: Theme.spacing.sm
         });
 
         const buttonContainer = DOMUtils.createElement('div', {
             display: 'flex',
-            gap: Theme.spacing.md,
+            gap: Theme.spacing.sm,
             justifyContent: 'center',
-            marginBottom: Theme.spacing.md
+            marginBottom: Theme.spacing.sm
         });
 
-        const startButton = UIComponents.createButton('Start Sniper', 'success', 'lg', () => {
+        const startButton = UIComponents.createButton('Start Sniper', 'success', 'md', () => {
             this.handleStartSniper();
         });
 
-        const stopButton = UIComponents.createButton('Stop Sniper', 'error', 'lg', () => {
+        const stopButton = UIComponents.createButton('Stop Sniper', 'error', 'md', () => {
             this.handleStopSniper();
         });
 
         buttonContainer.appendChild(startButton);
         buttonContainer.appendChild(stopButton);
 
+        // Price threshold setting
+        const settingsContainer = DOMUtils.createElement('div', {
+            padding: Theme.spacing.sm,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.sm,
+            border: `1px solid ${Theme.colors.border}`,
+            marginTop: Theme.spacing.sm
+        });
+
+        const settingsTitle = UIComponents.createLabel('Monitor Settings', {
+            fontSize: Theme.typography.fontSize.sm,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.xs
+        });
+
+        const thresholdContainer = DOMUtils.createElement('div', {
+            display: 'flex',
+            alignItems: 'center',
+            gap: Theme.spacing.sm
+        });
+
+        const thresholdLabel = UIComponents.createLabel('Alert Threshold:', {
+            marginBottom: '0',
+            fontSize: Theme.typography.fontSize.xs,
+            minWidth: '90px'
+        });
+
+        const thresholdInput = UIComponents.createInput('number', {
+            width: '60px',
+            fontSize: Theme.typography.fontSize.xs
+        }, {
+            min: '0.1',
+            max: '100',
+            step: '0.1',
+            value: '5.0',
+            id: 'sniper-price-threshold-input'
+        });
+
+        const thresholdPercent = UIComponents.createLabel('%', {
+            marginBottom: '0',
+            fontSize: Theme.typography.fontSize.sm
+        });
+
+        const applyBtn = UIComponents.createButton('Apply', 'primary', 'sm', () => {
+            const newThreshold = parseFloat(thresholdInput.value) / 100;
+            const marketMonitor = this.automationManager.getAutomation('market-monitor');
+            if (marketMonitor && marketMonitor.updatePriceThreshold) {
+                marketMonitor.updatePriceThreshold(newThreshold);
+
+                // Show confirmation
+                const originalText = applyBtn.textContent;
+                applyBtn.textContent = '✓ Applied';
+                applyBtn.style.backgroundColor = Theme.colors.success;
+                setTimeout(() => {
+                    applyBtn.textContent = originalText;
+                    applyBtn.style.backgroundColor = '';
+                }, 1500);
+            }
+        });
+
+        thresholdContainer.appendChild(thresholdLabel);
+        thresholdContainer.appendChild(thresholdInput);
+        thresholdContainer.appendChild(thresholdPercent);
+        thresholdContainer.appendChild(applyBtn);
+
+        settingsContainer.appendChild(settingsTitle);
+        settingsContainer.appendChild(thresholdContainer);
+
         section.appendChild(title);
         section.appendChild(buttonContainer);
+        section.appendChild(settingsContainer);
 
         return section;
     }
 
     createSniperStatus() {
         const section = DOMUtils.createElement('div', {
-            padding: Theme.spacing.md,
+            padding: Theme.spacing.sm,
             backgroundColor: Theme.colors.surface,
             borderRadius: Theme.borderRadius.md,
             border: `1px solid ${Theme.colors.border}`
         });
 
-        const title = UIComponents.createLabel('Sniper Status', {
-            fontSize: Theme.typography.fontSize.lg,
+        const title = UIComponents.createLabel('Status', {
+            fontSize: Theme.typography.fontSize.md,
             fontWeight: Theme.typography.fontWeight.bold,
-            marginBottom: Theme.spacing.md
+            marginBottom: Theme.spacing.sm
         });
 
         const statusGrid = DOMUtils.createElement('div', {
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
-            gap: Theme.spacing.sm
+            gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))',
+            gap: Theme.spacing.xs
         });
         statusGrid.id = 'sniper-status-grid';
 
@@ -274,6 +396,18 @@ export class MarketItemScraper {
     updateSniperStatus() {
         const statusGrid = document.getElementById('sniper-status-grid');
         if (!statusGrid) return;
+
+        // Update price threshold input to reflect current setting
+        const thresholdInput = document.getElementById('sniper-price-threshold-input');
+        if (thresholdInput) {
+            const marketMonitor = this.automationManager.getAutomation('market-monitor');
+            if (marketMonitor) {
+                const currentThreshold = (marketMonitor.settings.priceThreshold * 100).toFixed(1);
+                if (thresholdInput.value !== currentThreshold) {
+                    thresholdInput.value = currentThreshold;
+                }
+            }
+        }
 
         const stats = this.automationManager.getStats();
         const withdrawalStatus = this.automationManager.getAutomationStatus('withdrawal');
@@ -338,6 +472,18 @@ export class MarketItemScraper {
         if (hours > 0) return `${hours}h ${minutes % 60}m`;
         if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
         return `${seconds}s`;
+    }
+
+    updateCurrentFilterDisplay(config) {
+        const currentDisplay = document.getElementById('current-filter-display');
+        if (currentDisplay) {
+            if (config && config.length > 0) {
+                currentDisplay.value = JSON.stringify(config, null, 2);
+            } else {
+                currentDisplay.value = '';
+                currentDisplay.placeholder = 'No filter currently active';
+            }
+        }
     }
 
     createSellVerificationTab() {
