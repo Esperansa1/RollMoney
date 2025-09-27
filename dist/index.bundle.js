@@ -1185,7 +1185,7 @@ var RollMoney = (() => {
         // Automation manager lifecycle methods
         start() {
           this.isRunning = true;
-          this.currentStep = "waiting_for_trade_popup";
+          this.currentStep = "wait_for_continue";
           this.startStepMonitoring();
           console.log("SellItemVerification automation started");
         }
@@ -1220,12 +1220,12 @@ var RollMoney = (() => {
         }
         executeCurrentStep() {
           switch (this.currentStep) {
-            case "waiting_for_trade_popup":
-              this.step1_WaitForTradePopup();
-              break;
-            case "accept_trade_setup":
-              this.step1_AcceptTradeSetup();
-              break;
+            // case 'waiting_for_trade_popup':
+            //     this.step1_WaitForTradePopup();
+            //     break;
+            // case 'accept_trade_setup':
+            //     this.step1_AcceptTradeSetup();
+            //     break;
             case "wait_for_continue":
               this.step1_WaitForContinue();
               break;
@@ -1323,7 +1323,7 @@ var RollMoney = (() => {
           }
         }
         step2_SendItems() {
-          const sendButton = this.findButtonByText("SEND ITEMS NOW");
+          const sendButton = this.findButtonByText("Send Items Now");
           if (sendButton) {
             console.log('Found "Send Items Now" button');
             sendButton.click();
