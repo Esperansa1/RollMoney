@@ -588,11 +588,16 @@ export class MarketItemScraper {
             this.handleDebugInjectTestData();
         });
 
+        const fullSequenceBtn = UIComponents.createButton('Full CSGORoll Sequence', 'primary', 'sm', () => {
+            this.handleDebugFullSequence();
+        });
+
         debugButtonContainer.appendChild(extractDataBtn);
         debugButtonContainer.appendChild(sendItemsBtn);
         debugButtonContainer.appendChild(navigateInventoryBtn);
         debugButtonContainer.appendChild(viewStateBtn);
         debugButtonContainer.appendChild(injectTestDataBtn);
+        debugButtonContainer.appendChild(fullSequenceBtn);
 
         debugSection.appendChild(debugTitle);
         debugSection.appendChild(debugButtonContainer);
@@ -603,8 +608,23 @@ export class MarketItemScraper {
     handleDebugExtractData() {
         console.log("🔧 DEBUG: Manually triggering data extraction");
         try {
+            // First check if we're in the right state and have a modal
+            const modal = document.querySelector('mat-dialog-container');
+            if (!modal) {
+                console.log('⚠️ No modal found - you may need to open a trade dialog first');
+                UIComponents.showNotification('No modal found - open trade dialog first', 'warning');
+                return;
+            }
+
             this.sellItemVerification.step2_ExtractItemData();
-            UIComponents.showNotification('Data extraction triggered', 'info');
+
+            // Check if data was extracted successfully
+            if (this.sellItemVerification.collectedData && Object.keys(this.sellItemVerification.collectedData).length > 0) {
+                console.log('✅ Data extracted successfully:', this.sellItemVerification.collectedData);
+                UIComponents.showNotification('Data extraction successful!', 'success');
+            } else {
+                UIComponents.showNotification('Data extraction triggered but no data found', 'warning');
+            }
         } catch (error) {
             console.error('Debug extract data error:', error);
             UIComponents.showNotification('Error in data extraction', 'error');
@@ -614,8 +634,23 @@ export class MarketItemScraper {
     handleDebugSendItems() {
         console.log("🔧 DEBUG: Manually triggering send items");
         try {
+            // Check if we have collected data first
+            if (!this.sellItemVerification.collectedData || Object.keys(this.sellItemVerification.collectedData).length === 0) {
+                console.log('⚠️ No data collected yet - extract data first');
+                UIComponents.showNotification('Extract data first before sending items', 'warning');
+                return;
+            }
+
+            // Check if "Send Items Now" button exists
+            const sendButton = this.sellItemVerification.findButtonByText('Send Items Now');
+            if (!sendButton) {
+                console.log('⚠️ "Send Items Now" button not found');
+                UIComponents.showNotification('Send Items Now button not found', 'warning');
+                return;
+            }
+
             this.sellItemVerification.step2_SendItems();
-            UIComponents.showNotification('Send items triggered', 'info');
+            UIComponents.showNotification('Send items triggered - check console for navigation details', 'info');
         } catch (error) {
             console.error('Debug send items error:', error);
             UIComponents.showNotification('Error in send items', 'error');
@@ -625,6 +660,20 @@ export class MarketItemScraper {
     handleDebugNavigateInventory() {
         console.log("🔧 DEBUG: Manually triggering navigate inventory");
         try {
+            // Check if we're on Steam page
+            if (!this.sellItemVerification.isSteamPage()) {
+                console.log('⚠️ Not on Steam page - this step only works on Steam');
+                UIComponents.showNotification('Navigate inventory only works on Steam page', 'warning');
+                return;
+            }
+
+            // Check if we have collected data
+            if (!this.sellItemVerification.collectedData || Object.keys(this.sellItemVerification.collectedData).length === 0) {
+                console.log('⚠️ No data collected - use "Inject Test Data" or extract data first');
+                UIComponents.showNotification('No item data available - inject test data first', 'warning');
+                return;
+            }
+
             this.sellItemVerification.step3_NavigateInventory();
             UIComponents.showNotification('Navigate inventory triggered', 'info');
         } catch (error) {
@@ -669,6 +718,47 @@ export class MarketItemScraper {
 
         console.log("Injected test data:", testData);
         UIComponents.showNotification('Test data injected and state saved', 'success');
+    }
+
+    handleDebugFullSequence() {
+        console.log("🔧 DEBUG: Running full CSGORoll sequence");
+
+        if (this.sellItemVerification.isSteamPage()) {
+            UIComponents.showNotification('Full sequence is for CSGORoll page only', 'warning');
+            return;
+        }
+
+        // Step 1: Extract data
+        const modal = document.querySelector('mat-dialog-container');
+        if (!modal) {
+            UIComponents.showNotification('Open a trade dialog first, then try again', 'warning');
+            return;
+        }
+
+        console.log("Step 1: Extracting data...");
+        this.sellItemVerification.step2_ExtractItemData();
+
+        // Check if extraction worked
+        if (!this.sellItemVerification.collectedData || Object.keys(this.sellItemVerification.collectedData).length === 0) {
+            UIComponents.showNotification('Data extraction failed - check console for details', 'error');
+            return;
+        }
+
+        // Step 2: After a delay, trigger send items
+        setTimeout(() => {
+            console.log("Step 2: Triggering send items...");
+            const sendButton = this.sellItemVerification.findButtonByText('Send Items Now');
+
+            if (!sendButton) {
+                UIComponents.showNotification('Send Items Now button not found', 'error');
+                return;
+            }
+
+            this.sellItemVerification.step2_SendItems();
+            UIComponents.showNotification('Full sequence complete - Steam page should now continue automatically', 'success');
+        }, 2000);
+
+        UIComponents.showNotification('Starting full sequence...', 'info');
     }
 
     checkAndContinueSellVerification() {

@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "e6533a20";
+  window.ROLLMONEY_VERSION = "6a877047";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1338,7 +1338,7 @@ var RollMoney = (() => {
           monitor();
         }
         executeCurrentStep() {
-          console.log(`\u{1F504} Executing step: ${this.currentStep}`);
+          console.log(`\u{1F504} Executing step: ${this.currentStep} (${this.isSteamPage() ? "Steam" : "CSGORoll"} page)`);
           switch (this.currentStep) {
             // case 'waiting_for_trade_popup':
             //     this.step1_WaitForTradePopup();
@@ -1347,25 +1347,54 @@ var RollMoney = (() => {
             //     this.step1_AcceptTradeSetup();
             //     break;
             case "wait_for_continue":
-              this.step1_WaitForContinue();
+              if (this.isCSGORollPage()) {
+                this.step1_WaitForContinue();
+              } else {
+                console.log("Skipping wait_for_continue on Steam page");
+              }
               break;
             case "extract_item_data":
-              this.step2_ExtractItemData();
+              if (this.isCSGORollPage()) {
+                this.step2_ExtractItemData();
+              } else {
+                console.log("Skipping extract_item_data on Steam page");
+              }
               break;
             case "send_items":
-              this.step2_SendItems();
+              if (this.isCSGORollPage()) {
+                this.step2_SendItems();
+              } else {
+                console.log("Skipping send_items on Steam page");
+              }
               break;
             case "waiting_for_steam_completion":
-              this.checkSteamCompletion();
+              if (this.isCSGORollPage()) {
+                this.checkSteamCompletion();
+              } else {
+                console.log("On Steam page, changing from waiting_for_steam_completion to navigate_inventory");
+                this.currentStep = "navigate_inventory";
+              }
               break;
             case "navigate_inventory":
-              this.step3_NavigateInventory();
+              if (this.isSteamPage()) {
+                this.step3_NavigateInventory();
+              } else {
+                console.log("Skipping navigate_inventory on CSGORoll page");
+              }
               break;
             case "select_item":
-              this.step3_SelectItem();
+              if (this.isSteamPage()) {
+                this.step3_SelectItem();
+              } else {
+                console.log("Skipping select_item on CSGORoll page");
+              }
               break;
             case "confirm_trade":
-              this.step4_ConfirmTrade();
+              if (this.isSteamPage()) {
+                this.step4_ConfirmTrade();
+              } else {
+                console.log("Skipping confirm_trade on CSGORoll page");
+              }
               break;
             case "complete":
               this.completeVerification();
@@ -1604,32 +1633,142 @@ var RollMoney = (() => {
         }
         // Step 4: Trade Confirmation
         step4_ConfirmTrade() {
+          console.log("\u{1F91D} Step 4: Steam Trade Confirmation - checking trade dialog");
+          if (!this.isSteamPage()) {
+            console.log("\u274C Not on Steam page, cannot confirm trade");
+            return;
+          }
+          this.checkTradeConfirmationSteps();
+        }
+        checkTradeConfirmationSteps() {
           const confirmTradeElement = document.querySelector("div.content");
           if (confirmTradeElement && confirmTradeElement.textContent.includes("Click here to confirm trade contents")) {
+            console.log("\u2705 Found trade contents confirmation");
             confirmTradeElement.click();
             this.logStep("Clicked trade confirmation");
-            setTimeout(() => {
-              this.confirmGiftTrade();
-            }, 1e3);
+            return;
           }
-        }
-        confirmGiftTrade() {
-          const giftButton = document.querySelector("div.btn_green_steamui span");
-          if (giftButton && giftButton.textContent.includes("Yes, this is a gift")) {
-            giftButton.parentElement.click();
+          const readyButton = this.findTradeReadyButton();
+          if (readyButton) {
+            console.log("\u2705 Found trade ready button");
+            readyButton.click();
+            this.logStep("Clicked trade ready button");
+            return;
+          }
+          const giftButton = this.findGiftConfirmationButton();
+          if (giftButton) {
+            console.log("\u2705 Found gift confirmation button");
+            giftButton.click();
             this.logStep("Confirmed gift trade");
-            setTimeout(() => {
-              this.makeOffer();
-            }, 1e3);
+            return;
           }
-        }
-        makeOffer() {
-          const makeOfferButton = document.querySelector("#trade_confirmbtn");
+          const makeOfferButton = this.findMakeOfferButton();
           if (makeOfferButton) {
+            console.log("\u2705 Found make offer button");
             makeOfferButton.click();
             this.logStep("Clicked Make Offer button");
             this.currentStep = "complete";
+            return;
           }
+          if (this.checkTradeCompletion()) {
+            console.log("\u2705 Trade appears to be completed");
+            this.currentStep = "complete";
+            return;
+          }
+          this.checkForTradeErrors();
+        }
+        findTradeReadyButton() {
+          const selectors = [
+            'div[class*="ready"]',
+            'button[class*="ready"]',
+            "div.btn_green_steamui",
+            'span:contains("Ready")',
+            'div:contains("Ready to trade")'
+          ];
+          for (let selector of selectors) {
+            const element = document.querySelector(selector);
+            if (element && element.textContent.toLowerCase().includes("ready")) {
+              return element;
+            }
+          }
+          return null;
+        }
+        findGiftConfirmationButton() {
+          const giftButtons = document.querySelectorAll('div.btn_green_steamui span, button span, div[class*="button"] span');
+          for (let button of giftButtons) {
+            const text = button.textContent.toLowerCase();
+            if (text.includes("yes") && (text.includes("gift") || text.includes("present"))) {
+              return button.closest("div, button");
+            }
+          }
+          return null;
+        }
+        findMakeOfferButton() {
+          const selectors = [
+            "#trade_confirmbtn",
+            'button[id*="confirm"]',
+            'div[id*="confirm"]',
+            'button:contains("Make Offer")',
+            'div:contains("Make Offer")',
+            ".btn_green_steamui"
+          ];
+          for (let selector of selectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+              const text = element.textContent.toLowerCase();
+              if (text.includes("make") && text.includes("offer") || text.includes("confirm") || text.includes("send")) {
+                return element;
+              }
+            }
+          }
+          return null;
+        }
+        checkTradeCompletion() {
+          const completionIndicators = [
+            "Trade Offer Sent",
+            "trade offer has been sent",
+            "Your trade offer is being held",
+            "Trade offer pending",
+            "successfully sent"
+          ];
+          const pageText = document.body.textContent.toLowerCase();
+          for (let indicator of completionIndicators) {
+            if (pageText.includes(indicator.toLowerCase())) {
+              this.logStep(`Trade completion detected: ${indicator}`);
+              return true;
+            }
+          }
+          const url = window.location.href;
+          if (url.includes("tradeoffer") && url.includes("sent")) {
+            this.logStep("Trade completion detected via URL");
+            return true;
+          }
+          return false;
+        }
+        checkForTradeErrors() {
+          const errorIndicators = [
+            "error occurred",
+            "something went wrong",
+            "trade offer failed",
+            "unable to send",
+            "try again",
+            "session expired"
+          ];
+          const pageText = document.body.textContent.toLowerCase();
+          for (let error of errorIndicators) {
+            if (pageText.includes(error)) {
+              console.log(`\u26A0\uFE0F Trade error detected: ${error}`);
+              this.logStep(`Trade error: ${error}`);
+              this.handleTradeError(error);
+              return true;
+            }
+          }
+          return false;
+        }
+        handleTradeError(errorType) {
+          console.log(`\u274C Handling trade error: ${errorType}`);
+          this.currentStep = "complete";
+          this.logStep(`Trade failed with error: ${errorType}`);
         }
         checkSteamCompletion() {
           const state = this.loadState();
@@ -3179,11 +3318,15 @@ var RollMoney = (() => {
           const injectTestDataBtn = UIComponents.createButton("Inject Test Data", "info", "sm", () => {
             this.handleDebugInjectTestData();
           });
+          const fullSequenceBtn = UIComponents.createButton("Full CSGORoll Sequence", "primary", "sm", () => {
+            this.handleDebugFullSequence();
+          });
           debugButtonContainer.appendChild(extractDataBtn);
           debugButtonContainer.appendChild(sendItemsBtn);
           debugButtonContainer.appendChild(navigateInventoryBtn);
           debugButtonContainer.appendChild(viewStateBtn);
           debugButtonContainer.appendChild(injectTestDataBtn);
+          debugButtonContainer.appendChild(fullSequenceBtn);
           debugSection.appendChild(debugTitle);
           debugSection.appendChild(debugButtonContainer);
           return debugSection;
@@ -3191,8 +3334,19 @@ var RollMoney = (() => {
         handleDebugExtractData() {
           console.log("\u{1F527} DEBUG: Manually triggering data extraction");
           try {
+            const modal = document.querySelector("mat-dialog-container");
+            if (!modal) {
+              console.log("\u26A0\uFE0F No modal found - you may need to open a trade dialog first");
+              UIComponents.showNotification("No modal found - open trade dialog first", "warning");
+              return;
+            }
             this.sellItemVerification.step2_ExtractItemData();
-            UIComponents.showNotification("Data extraction triggered", "info");
+            if (this.sellItemVerification.collectedData && Object.keys(this.sellItemVerification.collectedData).length > 0) {
+              console.log("\u2705 Data extracted successfully:", this.sellItemVerification.collectedData);
+              UIComponents.showNotification("Data extraction successful!", "success");
+            } else {
+              UIComponents.showNotification("Data extraction triggered but no data found", "warning");
+            }
           } catch (error) {
             console.error("Debug extract data error:", error);
             UIComponents.showNotification("Error in data extraction", "error");
@@ -3201,8 +3355,19 @@ var RollMoney = (() => {
         handleDebugSendItems() {
           console.log("\u{1F527} DEBUG: Manually triggering send items");
           try {
+            if (!this.sellItemVerification.collectedData || Object.keys(this.sellItemVerification.collectedData).length === 0) {
+              console.log("\u26A0\uFE0F No data collected yet - extract data first");
+              UIComponents.showNotification("Extract data first before sending items", "warning");
+              return;
+            }
+            const sendButton = this.sellItemVerification.findButtonByText("Send Items Now");
+            if (!sendButton) {
+              console.log('\u26A0\uFE0F "Send Items Now" button not found');
+              UIComponents.showNotification("Send Items Now button not found", "warning");
+              return;
+            }
             this.sellItemVerification.step2_SendItems();
-            UIComponents.showNotification("Send items triggered", "info");
+            UIComponents.showNotification("Send items triggered - check console for navigation details", "info");
           } catch (error) {
             console.error("Debug send items error:", error);
             UIComponents.showNotification("Error in send items", "error");
@@ -3211,6 +3376,16 @@ var RollMoney = (() => {
         handleDebugNavigateInventory() {
           console.log("\u{1F527} DEBUG: Manually triggering navigate inventory");
           try {
+            if (!this.sellItemVerification.isSteamPage()) {
+              console.log("\u26A0\uFE0F Not on Steam page - this step only works on Steam");
+              UIComponents.showNotification("Navigate inventory only works on Steam page", "warning");
+              return;
+            }
+            if (!this.sellItemVerification.collectedData || Object.keys(this.sellItemVerification.collectedData).length === 0) {
+              console.log('\u26A0\uFE0F No data collected - use "Inject Test Data" or extract data first');
+              UIComponents.showNotification("No item data available - inject test data first", "warning");
+              return;
+            }
             this.sellItemVerification.step3_NavigateInventory();
             UIComponents.showNotification("Navigate inventory triggered", "info");
           } catch (error) {
@@ -3247,6 +3422,35 @@ var RollMoney = (() => {
           this.sellItemVerification.saveState();
           console.log("Injected test data:", testData);
           UIComponents.showNotification("Test data injected and state saved", "success");
+        }
+        handleDebugFullSequence() {
+          console.log("\u{1F527} DEBUG: Running full CSGORoll sequence");
+          if (this.sellItemVerification.isSteamPage()) {
+            UIComponents.showNotification("Full sequence is for CSGORoll page only", "warning");
+            return;
+          }
+          const modal = document.querySelector("mat-dialog-container");
+          if (!modal) {
+            UIComponents.showNotification("Open a trade dialog first, then try again", "warning");
+            return;
+          }
+          console.log("Step 1: Extracting data...");
+          this.sellItemVerification.step2_ExtractItemData();
+          if (!this.sellItemVerification.collectedData || Object.keys(this.sellItemVerification.collectedData).length === 0) {
+            UIComponents.showNotification("Data extraction failed - check console for details", "error");
+            return;
+          }
+          setTimeout(() => {
+            console.log("Step 2: Triggering send items...");
+            const sendButton = this.sellItemVerification.findButtonByText("Send Items Now");
+            if (!sendButton) {
+              UIComponents.showNotification("Send Items Now button not found", "error");
+              return;
+            }
+            this.sellItemVerification.step2_SendItems();
+            UIComponents.showNotification("Full sequence complete - Steam page should now continue automatically", "success");
+          }, 2e3);
+          UIComponents.showNotification("Starting full sequence...", "info");
         }
         checkAndContinueSellVerification() {
           console.log("=== CHECKING SELL VERIFICATION STATE ===");

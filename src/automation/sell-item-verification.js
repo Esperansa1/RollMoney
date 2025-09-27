@@ -193,7 +193,7 @@ export class SellItemVerification {
     }
 
     executeCurrentStep() {
-        console.log(`🔄 Executing step: ${this.currentStep}`);
+        console.log(`🔄 Executing step: ${this.currentStep} (${this.isSteamPage() ? 'Steam' : 'CSGORoll'} page)`);
 
         switch (this.currentStep) {
             // case 'waiting_for_trade_popup':
@@ -203,26 +203,61 @@ export class SellItemVerification {
             //     this.step1_AcceptTradeSetup();
             //     break;
             case 'wait_for_continue':
-                this.step1_WaitForContinue();
+                // Only execute this on CSGORoll page
+                if (this.isCSGORollPage()) {
+                    this.step1_WaitForContinue();
+                } else {
+                    console.log('Skipping wait_for_continue on Steam page');
+                }
                 break;
             case 'extract_item_data':
-                this.step2_ExtractItemData();
+                // Only execute this on CSGORoll page
+                if (this.isCSGORollPage()) {
+                    this.step2_ExtractItemData();
+                } else {
+                    console.log('Skipping extract_item_data on Steam page');
+                }
                 break;
             case 'send_items':
-                this.step2_SendItems();
+                // Only execute this on CSGORoll page
+                if (this.isCSGORollPage()) {
+                    this.step2_SendItems();
+                } else {
+                    console.log('Skipping send_items on Steam page');
+                }
                 break;
             case 'waiting_for_steam_completion':
-                // Wait for Steam tab to complete, monitor for completion via localStorage
-                this.checkSteamCompletion();
+                // Only execute this on CSGORoll page
+                if (this.isCSGORollPage()) {
+                    this.checkSteamCompletion();
+                } else {
+                    console.log('On Steam page, changing from waiting_for_steam_completion to navigate_inventory');
+                    this.currentStep = 'navigate_inventory';
+                }
                 break;
             case 'navigate_inventory':
-                this.step3_NavigateInventory();
+                // Only execute this on Steam page
+                if (this.isSteamPage()) {
+                    this.step3_NavigateInventory();
+                } else {
+                    console.log('Skipping navigate_inventory on CSGORoll page');
+                }
                 break;
             case 'select_item':
-                this.step3_SelectItem();
+                // Only execute this on Steam page
+                if (this.isSteamPage()) {
+                    this.step3_SelectItem();
+                } else {
+                    console.log('Skipping select_item on CSGORoll page');
+                }
                 break;
             case 'confirm_trade':
-                this.step4_ConfirmTrade();
+                // Only execute this on Steam page
+                if (this.isSteamPage()) {
+                    this.step4_ConfirmTrade();
+                } else {
+                    console.log('Skipping confirm_trade on CSGORoll page');
+                }
                 break;
             case 'complete':
                 this.completeVerification();
@@ -543,39 +578,189 @@ export class SellItemVerification {
 
     // Step 4: Trade Confirmation
     step4_ConfirmTrade() {
-        // Look for trade confirmation popup
+        console.log('🤝 Step 4: Steam Trade Confirmation - checking trade dialog');
+
+        if (!this.isSteamPage()) {
+            console.log('❌ Not on Steam page, cannot confirm trade');
+            return;
+        }
+
+        // Check for various Steam trade confirmation elements
+        this.checkTradeConfirmationSteps();
+    }
+
+    checkTradeConfirmationSteps() {
+        // Step 4a: Initial trade contents confirmation
         const confirmTradeElement = document.querySelector('div.content');
         if (confirmTradeElement && confirmTradeElement.textContent.includes('Click here to confirm trade contents')) {
+            console.log('✅ Found trade contents confirmation');
             confirmTradeElement.click();
             this.logStep('Clicked trade confirmation');
-
-            // Wait for gift confirmation
-            setTimeout(() => {
-                this.confirmGiftTrade();
-            }, 1000);
+            return;
         }
-    }
 
-    confirmGiftTrade() {
-        const giftButton = document.querySelector('div.btn_green_steamui span');
-        if (giftButton && giftButton.textContent.includes('Yes, this is a gift')) {
-            giftButton.parentElement.click();
+        // Step 4b: Look for "Ready to trade" or similar confirmation
+        const readyButton = this.findTradeReadyButton();
+        if (readyButton) {
+            console.log('✅ Found trade ready button');
+            readyButton.click();
+            this.logStep('Clicked trade ready button');
+            return;
+        }
+
+        // Step 4c: Gift confirmation dialog
+        const giftButton = this.findGiftConfirmationButton();
+        if (giftButton) {
+            console.log('✅ Found gift confirmation button');
+            giftButton.click();
             this.logStep('Confirmed gift trade');
-
-            // Wait for final make offer button
-            setTimeout(() => {
-                this.makeOffer();
-            }, 1000);
+            return;
         }
-    }
 
-    makeOffer() {
-        const makeOfferButton = document.querySelector('#trade_confirmbtn');
+        // Step 4d: Final make offer button
+        const makeOfferButton = this.findMakeOfferButton();
         if (makeOfferButton) {
+            console.log('✅ Found make offer button');
             makeOfferButton.click();
             this.logStep('Clicked Make Offer button');
             this.currentStep = 'complete';
+            return;
         }
+
+        // Step 4e: Check for trade completion confirmation
+        if (this.checkTradeCompletion()) {
+            console.log('✅ Trade appears to be completed');
+            this.currentStep = 'complete';
+            return;
+        }
+
+        // Step 4f: Check for any error messages
+        this.checkForTradeErrors();
+    }
+
+    findTradeReadyButton() {
+        // Look for various "ready" button patterns
+        const selectors = [
+            'div[class*="ready"]',
+            'button[class*="ready"]',
+            'div.btn_green_steamui',
+            'span:contains("Ready")',
+            'div:contains("Ready to trade")'
+        ];
+
+        for (let selector of selectors) {
+            const element = document.querySelector(selector);
+            if (element && element.textContent.toLowerCase().includes('ready')) {
+                return element;
+            }
+        }
+
+        return null;
+    }
+
+    findGiftConfirmationButton() {
+        // Look for gift confirmation buttons
+        const giftButtons = document.querySelectorAll('div.btn_green_steamui span, button span, div[class*="button"] span');
+
+        for (let button of giftButtons) {
+            const text = button.textContent.toLowerCase();
+            if (text.includes('yes') && (text.includes('gift') || text.includes('present'))) {
+                return button.closest('div, button');
+            }
+        }
+
+        return null;
+    }
+
+    findMakeOfferButton() {
+        // Look for make offer button with multiple selectors
+        const selectors = [
+            '#trade_confirmbtn',
+            'button[id*="confirm"]',
+            'div[id*="confirm"]',
+            'button:contains("Make Offer")',
+            'div:contains("Make Offer")',
+            '.btn_green_steamui'
+        ];
+
+        for (let selector of selectors) {
+            const element = document.querySelector(selector);
+            if (element) {
+                const text = element.textContent.toLowerCase();
+                if (text.includes('make') && text.includes('offer') ||
+                    text.includes('confirm') ||
+                    text.includes('send')) {
+                    return element;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    checkTradeCompletion() {
+        // Check for trade completion indicators
+        const completionIndicators = [
+            'Trade Offer Sent',
+            'trade offer has been sent',
+            'Your trade offer is being held',
+            'Trade offer pending',
+            'successfully sent'
+        ];
+
+        const pageText = document.body.textContent.toLowerCase();
+
+        for (let indicator of completionIndicators) {
+            if (pageText.includes(indicator.toLowerCase())) {
+                this.logStep(`Trade completion detected: ${indicator}`);
+                return true;
+            }
+        }
+
+        // Check for success URLs
+        const url = window.location.href;
+        if (url.includes('tradeoffer') && url.includes('sent')) {
+            this.logStep('Trade completion detected via URL');
+            return true;
+        }
+
+        return false;
+    }
+
+    checkForTradeErrors() {
+        // Check for common error messages
+        const errorIndicators = [
+            'error occurred',
+            'something went wrong',
+            'trade offer failed',
+            'unable to send',
+            'try again',
+            'session expired'
+        ];
+
+        const pageText = document.body.textContent.toLowerCase();
+
+        for (let error of errorIndicators) {
+            if (pageText.includes(error)) {
+                console.log(`⚠️ Trade error detected: ${error}`);
+                this.logStep(`Trade error: ${error}`);
+
+                // Optionally retry or mark as failed
+                this.handleTradeError(error);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    handleTradeError(errorType) {
+        console.log(`❌ Handling trade error: ${errorType}`);
+
+        // For now, mark as complete with error status
+        // Could be enhanced to retry logic in the future
+        this.currentStep = 'complete';
+        this.logStep(`Trade failed with error: ${errorType}`);
     }
 
     checkSteamCompletion() {
