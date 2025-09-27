@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "34c792e7";
+  window.ROLLMONEY_VERSION = "0e907b9f";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1310,13 +1310,14 @@ var RollMoney = (() => {
           monitor();
         }
         executeCurrentStep() {
+          console.log(`\u{1F504} Executing step: ${this.currentStep}`);
           switch (this.currentStep) {
-            // case 'waiting_for_trade_popup':
-            //     this.step1_WaitForTradePopup();
-            //     break;
-            // case 'accept_trade_setup':
-            //     this.step1_AcceptTradeSetup();
-            //     break;
+            case "waiting_for_trade_popup":
+              this.step1_WaitForTradePopup();
+              break;
+            case "accept_trade_setup":
+              this.step1_AcceptTradeSetup();
+              break;
             case "wait_for_continue":
               this.step1_WaitForContinue();
               break;
@@ -1341,6 +1342,8 @@ var RollMoney = (() => {
             case "complete":
               this.completeVerification();
               break;
+            default:
+              console.log(`\u2753 Unknown step: ${this.currentStep}`);
           }
         }
         // Step 1: Accept Trade Setup
@@ -2948,9 +2951,13 @@ var RollMoney = (() => {
           const manualTriggerButton = UIComponents.createButton("Manual Trigger", "secondary", "md", () => {
             this.handleManualTrigger();
           });
+          const emergencyStopButton = UIComponents.createButton("Emergency Stop", "error", "md", () => {
+            this.handleEmergencyStop();
+          });
           buttonContainer.appendChild(startButton);
           buttonContainer.appendChild(stopButton);
           buttonContainer.appendChild(manualTriggerButton);
+          buttonContainer.appendChild(emergencyStopButton);
           section.appendChild(title);
           section.appendChild(buttonContainer);
           return section;
@@ -3039,6 +3046,21 @@ var RollMoney = (() => {
             UIComponents.showNotification("Failed to trigger automation", "error");
           }
         }
+        handleEmergencyStop() {
+          console.log("\u{1F6D1} EMERGENCY STOP - Clearing all automation state");
+          try {
+            this.automationManager.stopAll();
+            this.sellItemVerification.clearState();
+            this.sellItemVerification.isRunning = false;
+            this.sellItemVerification.currentStep = "idle";
+            localStorage.removeItem("sellItemVerificationState");
+            UIComponents.showNotification("Emergency stop completed - all automation cleared!", "success");
+            console.log("\u{1F6D1} Emergency stop completed");
+          } catch (error) {
+            console.error("Error during emergency stop:", error);
+            UIComponents.showNotification("Error during emergency stop", "error");
+          }
+        }
         checkAndContinueSellVerification() {
           console.log("=== CHECKING SELL VERIFICATION STATE ===");
           console.log("hasRestorableState:", this.sellItemVerification.hasRestorableState);
@@ -3064,8 +3086,13 @@ var RollMoney = (() => {
             setTimeout(() => {
               try {
                 console.log("\u{1F680} Starting automation manager...");
+                console.log("Current automation step before start:", this.sellItemVerification.currentStep);
+                console.log("Automation isRunning before start:", this.sellItemVerification.isRunning);
                 this.automationManager.startAutomation("sell-item-verification");
                 console.log("\u2705 Auto-started sell item verification from saved state");
+                console.log("Current automation step after start:", this.sellItemVerification.currentStep);
+                console.log("Automation isRunning after start:", this.sellItemVerification.isRunning);
+                console.log("Automation manager isRunning:", this.automationManager.isRunning);
               } catch (error) {
                 console.error("\u274C Failed to auto-start sell verification:", error);
               }

@@ -403,9 +403,14 @@ export class MarketItemScraper {
             this.handleManualTrigger();
         });
 
+        const emergencyStopButton = UIComponents.createButton('Emergency Stop', 'error', 'md', () => {
+            this.handleEmergencyStop();
+        });
+
         buttonContainer.appendChild(startButton);
         buttonContainer.appendChild(stopButton);
         buttonContainer.appendChild(manualTriggerButton);
+        buttonContainer.appendChild(emergencyStopButton);
 
         section.appendChild(title);
         section.appendChild(buttonContainer);
@@ -515,6 +520,29 @@ export class MarketItemScraper {
         }
     }
 
+    handleEmergencyStop() {
+        console.log("🛑 EMERGENCY STOP - Clearing all automation state");
+
+        try {
+            // Stop all automations
+            this.automationManager.stopAll();
+
+            // Clear sell verification state
+            this.sellItemVerification.clearState();
+            this.sellItemVerification.isRunning = false;
+            this.sellItemVerification.currentStep = 'idle';
+
+            // Clear localStorage
+            localStorage.removeItem('sellItemVerificationState');
+
+            UIComponents.showNotification('Emergency stop completed - all automation cleared!', 'success');
+            console.log("🛑 Emergency stop completed");
+        } catch (error) {
+            console.error('Error during emergency stop:', error);
+            UIComponents.showNotification('Error during emergency stop', 'error');
+        }
+    }
+
     checkAndContinueSellVerification() {
         console.log('=== CHECKING SELL VERIFICATION STATE ===');
         console.log('hasRestorableState:', this.sellItemVerification.hasRestorableState);
@@ -550,8 +578,15 @@ export class MarketItemScraper {
             setTimeout(() => {
                 try {
                     console.log('🚀 Starting automation manager...');
+                    console.log('Current automation step before start:', this.sellItemVerification.currentStep);
+                    console.log('Automation isRunning before start:', this.sellItemVerification.isRunning);
+
                     this.automationManager.startAutomation('sell-item-verification');
+
                     console.log('✅ Auto-started sell item verification from saved state');
+                    console.log('Current automation step after start:', this.sellItemVerification.currentStep);
+                    console.log('Automation isRunning after start:', this.sellItemVerification.isRunning);
+                    console.log('Automation manager isRunning:', this.automationManager.isRunning);
                 } catch (error) {
                     console.error('❌ Failed to auto-start sell verification:', error);
                 }
