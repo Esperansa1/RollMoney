@@ -7,16 +7,14 @@ export class SellItemVerification {
         this.collectedData = {};
         this.tradeLog = [];
         this.stepTimeouts = new Map();
-        this.stateKey = 'sellItemVerificationState';
 
         // Automation manager integration
         this.id = 'sell-item-verification';
         this.priority = 2;
-        this.interval = 1000;
         this.settings = {
             enabled: true,
             maxWaitTime: 30000, // 30 seconds max wait per step
-            stepCheckInterval: 500, // Check every 500ms
+            stepCheckInterval: 2000, // Check every 2000ms
             logTradeData: true
         };
 
@@ -24,112 +22,120 @@ export class SellItemVerification {
         this.initializeCrossPageState();
     }
 
-    // Cross-page state management
+    // Cross-page state management - ONLY for Steam pages
     initializeCrossPageState() {
         console.log('🔄 SellItemVerification: Initializing cross-page state...');
-        console.log('🔄 Current URL:', window.location.href);
+        console.log('🔄 Page hostname:', window.location.hostname);
+        console.log('🔄 Is Steam page:', this.isSteamPage());
+        console.log('🔄 Is CSGORoll page:', this.isCSGORollPage());
 
-        // Check if we're continuing from another page
-        const savedState = this.loadState();
-        console.log('🔄 Loaded state from localStorage:', savedState);
-
-        if (savedState && savedState.isActive) {
-            console.log('✅ Found saved state for cross-page continuation:', savedState);
-            this.restoreState(savedState);
-
-            // Mark that we have state but don't auto-start here
-            // Let the MarketScraper checkAndContinueSellVerification handle the start
-            this.hasRestorableState = true;
-            console.log('✅ Set hasRestorableState = true');
-        } else {
-            console.log('❌ No active saved state found');
-            this.hasRestorableState = false;
-        }
-    }
-
-    saveState() {
-        const state = {
-            isActive: this.isRunning,
-            currentStep: this.currentStep,
-            collectedData: this.collectedData,
-            tradeLog: this.tradeLog,
-            timestamp: Date.now()
-        };
-
-        // Validate state before saving
-        const isValidState = this.validateState(state);
-        if (!isValidState) {
-            console.log('⚠️ State validation failed, not saving invalid state');
+        // ONLY check for state on Steam pages - CSGORoll should never auto-restore
+        if (!this.isSteamPage()) {
+            console.log('🚫 Not on Steam page - skipping state restoration');
             return;
         }
 
-        try {
-            localStorage.setItem(this.stateKey, JSON.stringify(state));
-            console.log('✅ State saved successfully:', state);
-        } catch (error) {
-            console.error('❌ Failed to save automation state:', error);
+        // Check for URL parameters (only on Steam pages)
+        const urlState = this.decodeDataFromUrlParams();
+        if (urlState) {
+            console.log('✅ Found automation data in URL parameters on Steam page');
+            console.log('   - Step:', urlState.currentStep);
+            console.log('   - Item name:', urlState.collectedData?.itemName || 'MISSING');
+            console.log('   - Inventory page:', urlState.collectedData?.inventoryPage || 'MISSING');
+            console.log('   - Item position:', urlState.collectedData?.itemPosition || 'MISSING');
+
+            // Validate Steam page data
+            if (!urlState.collectedData || !urlState.collectedData.itemName) {
+                console.log('⚠️ Warning: On Steam page but missing critical item data');
+            } else {
+                console.log('✅ Steam page has all required item data');
+            }
+        } else {
+            console.log('🔍 No URL parameters found on Steam page');
         }
     }
 
-    validateState(state) {
-        // Basic validation rules
-        if (!state.isActive) {
-            console.log('State validation: isActive is false');
-            return false;
-        }
+    // Removed saveState(), validateState(), and loadState() methods
+    // Cross-domain state transfer now uses URL parameters exclusively
 
-        if (state.currentStep === 'idle' || state.currentStep === 'wait_for_continue') {
-            console.log('State validation: currentStep is not ready for cross-page');
-            return false;
-        }
+    // URL parameter utility methods for cross-domain data transfer
+    encodeDataToUrlParams(data) {
+        try {
+            // Create a compact representation of the data
+            const compactData = {
+                n: data.itemName || '',           // name
+                c: data.itemCategory || '',       // category
+                v: data.itemValue || '',          // value
+                p: data.inventoryPage || 1,       // page
+                i: data.itemPosition || 1,        // item position
+                s: 'navigate_inventory',           // step
+                t: Date.now()                     // timestamp
+            };
 
-        // If we're at navigate_inventory step, we should have collected data
-        if (state.currentStep === 'navigate_inventory') {
-            if (!state.collectedData || Object.keys(state.collectedData).length === 0) {
-                console.log('State validation: navigate_inventory step but no collected data');
-                return false;
+            // Encode as base64 to handle special characters
+            const jsonString = JSON.stringify(compactData);
+            const encoded = btoa(encodeURIComponent(jsonString));
+
+            console.log('🔗 Encoded data for URL:', compactData);
+            console.log('🔗 Base64 encoded:', encoded);
+
+            return encoded;
+        } catch (error) {
+            console.error('❌ Failed to encode data for URL:', error);
+            return null;
+        }
+    }
+
+    decodeDataFromUrlParams() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const encodedData = urlParams.get('automation_data');
+
+            if (!encodedData) {
+                console.log('🔍 No automation_data parameter found in URL');
+                return null;
             }
 
-            if (!state.collectedData.itemName || state.collectedData.itemName === 'Unknown') {
-                console.log('State validation: missing or invalid item name');
-                return false;
+            console.log('🔗 Found encoded data in URL:', encodedData);
+
+            // Decode from base64
+            const jsonString = decodeURIComponent(atob(encodedData));
+            const compactData = JSON.parse(jsonString);
+
+            console.log('🔗 Decoded compact data:', compactData);
+
+            // Expand back to full format
+            const fullData = {
+                itemName: compactData.n || 'Unknown',
+                itemCategory: compactData.c || 'Unknown',
+                itemValue: compactData.v || 'Unknown',
+                inventoryPage: compactData.p || 1,
+                itemPosition: compactData.i || 1,
+                timestamp: new Date().toISOString()
+            };
+
+            // Validate data age (max 10 minutes)
+            const ageMinutes = (Date.now() - compactData.t) / (1000 * 60);
+            if (ageMinutes > 10) {
+                console.log('❌ URL data is too old:', ageMinutes.toFixed(1), 'minutes');
+                return null;
             }
-        }
 
-        console.log('✅ State validation passed');
-        return true;
-    }
+            console.log('✅ Successfully decoded automation data from URL:', fullData);
+            return {
+                collectedData: fullData,
+                currentStep: compactData.s || 'navigate_inventory',
+                isActive: true,
+                timestamp: compactData.t
+            };
 
-    loadState() {
-        try {
-            const stateJson = localStorage.getItem(this.stateKey);
-            if (stateJson) {
-                const state = JSON.parse(stateJson);
-                // Check if state is not too old (max 10 minutes)
-                if (Date.now() - state.timestamp < 10 * 60 * 1000) {
-                    return state;
-                }
-            }
         } catch (error) {
-            console.error('Failed to load automation state:', error);
-        }
-        return null;
-    }
-
-    restoreState(state) {
-        this.currentStep = state.currentStep || 'idle';
-        this.collectedData = state.collectedData || {};
-        this.tradeLog = state.tradeLog || [];
-        console.log('Restored automation state:', state);
-    }
-
-    clearState() {
-        try {
-            localStorage.removeItem(this.stateKey);
-        } catch (error) {
-            console.error('Failed to clear automation state:', error);
+            console.error('❌ Failed to decode data from URL:', error);
+            return null;
         }
     }
+
+    // Removed clearState() method - no longer using localStorage
 
     isSteamPage() {
         return window.location.hostname.includes('steamcommunity.com');
@@ -141,25 +147,39 @@ export class SellItemVerification {
 
     // Automation manager lifecycle methods
     start() {
+        console.log('🚀 Starting SellItemVerification automation...');
         this.isRunning = true;
-        this.currentStep = 'wait_for_continue'; // Keep for debugging - WE ARE STILL DEBUGGING DONT TOUCH
-        this.saveState(); // Save state when starting
+
+        // Set appropriate starting step based on context
+        if(this.isCSGORollPage()){
+            this.currentStep = 'waiting_for_trade_popup';
+            console.log('🔄 Starting fresh automation from Yes Im ready');
+        }
+        else if(this.isSteamPage()){
+            this.currentStep = 'navigate_inventory';
+            console.log('🔄 Navigating Inventory');
+        }
+
         this.startStepMonitoring();
-        console.log('SellItemVerification automation started');
-        console.log('Current automation state:', {
+        console.log('✅ SellItemVerification automation started');
+        console.log('📋 Current automation state:', {
             currentStep: this.currentStep,
             isRunning: this.isRunning,
             hasCollectedData: Object.keys(this.collectedData).length > 0,
-            collectedData: this.collectedData
         });
     }
 
     stop() {
+        console.log('🛑 Stopping SellItemVerification automation...');
         this.isRunning = false;
         this.currentStep = 'idle';
         this.clearAllTimeouts();
-        this.clearState(); // Clear state when stopping
-        console.log('SellItemVerification automation stopped');
+
+        // Reset collected data and state
+        this.collectedData = {};
+        this.tradeLog = [];
+
+        console.log('✅ SellItemVerification automation stopped and reset');
     }
 
     pause() {
@@ -193,15 +213,22 @@ export class SellItemVerification {
     }
 
     executeCurrentStep() {
+        // Check if automation is still running
+        if (!this.isRunning) {
+            console.log(`⏸️ Automation stopped, skipping step: ${this.currentStep}`);
+            return;
+        }
+
         console.log(`🔄 Executing step: ${this.currentStep} (${this.isSteamPage() ? 'Steam' : 'CSGORoll'} page)`);
 
         switch (this.currentStep) {
-            // case 'waiting_for_trade_popup':
-            //     this.step1_WaitForTradePopup();
-            //     break;
-            // case 'accept_trade_setup':
-            //     this.step1_AcceptTradeSetup();
-            //     break;
+            case 'waiting_for_trade_popup':
+                if (this.isCSGORollPage()) {
+                    this.step1_WaitForTradePopup();
+                } else {
+                    console.log('Skipping wait_for_continue on Steam page');
+                }
+                break;
             case 'wait_for_continue':
                 // Only execute this on CSGORoll page
                 if (this.isCSGORollPage()) {
@@ -278,15 +305,6 @@ export class SellItemVerification {
         }
     }
 
-    step1_AcceptTradeSetup() {
-        const readyButton = this.findButtonByText('Yes, I\'m ready');
-        if (readyButton) {
-            readyButton.click();
-            this.currentStep = 'wait_for_continue';
-            this.logStep('Clicked "Yes, I\'m ready" button');
-        }
-    }
-
     step1_WaitForContinue() {
         const continueButton = this.findButtonByText('Continue');
         if (continueButton) {
@@ -297,56 +315,67 @@ export class SellItemVerification {
         }
     }
 
-    // Step 2: Item Dialog Extraction
+    // Step 2: Item Dialog Extraction with retry logic
     step2_ExtractItemData() {
         console.log('🔍 Step 2: Extracting item data from dialog');
+
+        // Initialize retry tracking if not exists
+        if (!this.extractionAttempts) {
+            this.extractionAttempts = 0;
+            this.maxExtractionAttempts = 5;
+            this.extractionDelay = 2000; // 2 seconds between attempts
+        }
+
+        this.extractionAttempts++;
+        console.log(`📋 Extraction attempt ${this.extractionAttempts}/${this.maxExtractionAttempts}`);
 
         const modal = document.querySelector('mat-dialog-container');
         if (!modal) {
             console.log('❌ No modal dialog found');
+            this.retryExtraction('No modal dialog found');
             return;
         }
 
-        console.log('✅ Modal dialog found, extracting data...');
+        console.log('✅ Modal dialog found, waiting for content to load...');
+
+        // Wait a moment for content to fully load
+        setTimeout(() => {
+            this.performDataExtraction(modal);
+        }, 1000);
+    }
+
+    performDataExtraction(modal) {
+        console.log('🔍 Performing data extraction...');
+        console.log('📋 Modal HTML preview:', modal.outerHTML.substring(0, 500) + '...');
 
         try {
             // Extract item category
             const categoryElement = modal.querySelector('span[data-test="item-subcategory"]');
             const itemCategory = categoryElement ? categoryElement.textContent.trim() : 'Unknown';
-            console.log('Item category:', itemCategory);
+            console.log('📂 Item category:', itemCategory);
 
             // Extract item name from label title
             const labelElement = modal.querySelector('label[title]');
             const itemName = labelElement ? labelElement.getAttribute('title') : 'Unknown';
-            console.log('Item name:', itemName);
+            console.log('🏷️ Item name:', itemName);
 
             // Extract item value
             const valueElement = modal.querySelector('span.currency-value');
             const itemValue = valueElement ? valueElement.textContent.trim() : 'Unknown';
-            console.log('Item value:', itemValue);
+            console.log('💰 Item value:', itemValue);
 
             // Extract inventory page number
             const pageText = modal.textContent || '';
             const pageMatch = pageText.match(/On page (\d+) of your Steam inventory/i);
             const inventoryPage = pageMatch ? parseInt(pageMatch[1]) : 1;
-            console.log('Inventory page:', inventoryPage);
+            console.log('📄 Inventory page:', inventoryPage);
 
             // Calculate item position in 4x4 grid
             const itemPosition = this.calculateItemPosition(modal);
-            console.log('Item position:', itemPosition);
+            console.log('📍 Item position:', itemPosition);
 
-            // Validate that we got meaningful data
-            if (itemName === 'Unknown' || itemCategory === 'Unknown') {
-                console.log('⚠️ Warning: Some item data is missing');
-                // Log available elements for debugging
-                console.log('Available elements in modal:');
-                console.log('- Labels with title:', modal.querySelectorAll('label[title]'));
-                console.log('- Category elements:', modal.querySelectorAll('span[data-test="item-subcategory"]'));
-                console.log('- Value elements:', modal.querySelectorAll('span.currency-value'));
-            }
-
-            // Store collected data
-            this.collectedData = {
+            // Validate extracted data quality
+            const extractedData = {
                 itemName,
                 itemCategory,
                 itemValue,
@@ -355,73 +384,196 @@ export class SellItemVerification {
                 timestamp: new Date().toISOString()
             };
 
-            console.log('✅ Successfully extracted item data:', this.collectedData);
-            this.logStep('Extracted item data', this.collectedData);
-            this.currentStep = 'send_items';
-            this.saveState(); // Save state after data extraction
+            if (this.validateExtractedData(extractedData, modal)) {
+                // Successful extraction
+                this.collectedData = extractedData;
+                console.log('✅ Successfully extracted complete item data:', this.collectedData);
+                this.logStep('Extracted item data', this.collectedData);
+                this.currentStep = 'send_items';
+
+                // Reset retry tracking
+                this.extractionAttempts = 0;
+            } else {
+                // Invalid data - retry
+                console.log('⚠️ Extracted data is incomplete or invalid');
+                this.retryExtraction('Data validation failed');
+            }
 
         } catch (error) {
             console.error('❌ Error extracting item data:', error);
             this.logError(error);
+            this.retryExtraction(`Extraction error: ${error.message}`);
+        }
+    }
+
+    validateExtractedData(data, modal) {
+        const issues = [];
+
+        // Check for critical missing data
+        if (!data.itemName || data.itemName === 'Unknown' || data.itemName.length < 3) {
+            issues.push('Invalid or missing item name');
+        }
+
+        if (!data.itemCategory || data.itemCategory === 'Unknown') {
+            issues.push('Invalid or missing item category');
+        }
+
+        if (!data.itemValue || data.itemValue === 'Unknown') {
+            issues.push('Invalid or missing item value');
+        }
+
+        if(data.itemPosition < 0){
+            console.log('❌ item position fetch failed');
+            console.log('Got value: ', data.itemPosition);
+            issues.push('Invalid Item Position fetched');
+        }
+
+        if (issues.length > 0) {
+            console.log('❌ Data validation failed:', issues);
+            console.log('📋 Current extracted data:', data);
+            return false;
+        }
+
+        console.log('✅ Data validation passed');
+        return true;
+    }
+
+    retryExtraction(reason) {
+        if (this.extractionAttempts < this.maxExtractionAttempts) {
+            console.log(`🔄 Retrying extraction in ${this.extractionDelay/1000} seconds (Reason: ${reason})`);
+
+            setTimeout(() => {
+                this.step2_ExtractItemData();
+            }, this.extractionDelay);
+        } else {
+            console.error('❌ Maximum extraction attempts reached. Extraction failed.');
+            this.logStep(`Extraction failed after ${this.maxExtractionAttempts} attempts: ${reason}`);
+
+            // Reset for next time
+            this.extractionAttempts = 0;
+
+            // Stay in current step - don't proceed with incomplete data
+            console.log('⏸️ Staying in extract_item_data step due to failed extraction');
         }
     }
 
     calculateItemPosition(modal) {
         try {
             // Look for item grid containers (assuming 4x4 layout)
-            const gridItems = modal.querySelectorAll('[class*="item"], [class*="grid"], .inventory-item');
+            const gridItems = document.querySelectorAll('.item');
+            console.log("Got grid items: ", gridItems);
 
             // If we can't find a clear grid structure, return position 1 as default
-            if (gridItems.length === 0) return 1;
+            if (gridItems.length === 0) return -1;
 
             // Find the highlighted/selected item
-            const selectedItem = modal.querySelector('.selected, .highlight, .active, [class*="selected"]');
+            const selectedItem = modal.querySelector('.item.selected');
+            console.log("Selected item, ", selectedItem);
 
             if (selectedItem) {
                 const itemIndex = Array.from(gridItems).indexOf(selectedItem);
                 return itemIndex >= 0 ? itemIndex + 1 : 1; // Convert to 1-based index
             }
 
-            return 1; // Default position
+            return -2; // Default position
         } catch (error) {
             console.error('Error calculating item position:', error);
-            return 1;
+            return -3;
         }
     }
 
     step2_SendItems() {
         const sendButton = this.findButtonByText('Send Items Now');
         if (sendButton) {
-            console.log('Found "Send Items Now" button');
+            console.log('🔍 Found "Send Items Now" button');
 
-            // IMPORTANT: Set the step for Steam page BEFORE saving state
-            this.currentStep = 'navigate_inventory';
-            this.isRunning = true; // Ensure it stays active
-            this.saveState(); // This will save navigate_inventory step
-            this.logStep('Clicked "Send Items Now" button - state saved for Steam page');
+            // Check if we have collected data before proceeding
+            if (!this.collectedData || Object.keys(this.collectedData).length === 0) {
+                console.error('❌ No collected data available - cannot transfer to Steam page');
+                this.logStep('Send Items failed: No collected data');
+                return;
+            }
 
-            // Check if button opens in new tab by checking target attribute
-            console.log('Button element:', sendButton);
-            console.log('Button href:', sendButton.href);
-            console.log('Button target:', sendButton.target);
+            console.log('📋 Current collected data before transfer:', this.collectedData);
 
-            // Click button (this will navigate to Steam page and create new script instance)
-            sendButton.click();
+            // Encode data for URL transfer to Steam domain
+            console.log('🔗 Encoding data for cross-domain transfer...');
+            const encodedData = this.encodeDataToUrlParams(this.collectedData);
 
-            // Monitor for new tab/window opening
-            setTimeout(() => {
-                if (this.isSteamPage()) {
-                    console.log('Successfully navigated to Steam page');
-                } else {
-                    console.log('Still on CSGORoll page - button may have opened new tab');
-                    console.log('Current URL:', window.location.href);
+            if (!encodedData) {
+                console.error('❌ Failed to encode data for URL transfer');
+                this.logStep('Send Items failed: Data encoding failed');
+                return;
+            }
 
-                    // The Steam page should pick up the saved state automatically
-                    // Keep the current page automation in a waiting state
-                    this.currentStep = 'waiting_for_steam_completion';
-                    this.logStep('Waiting for Steam tab to complete the automation');
-                }
-            }, 3000);
+            console.log('🔗 Button element details:', {
+                tagName: sendButton.tagName,
+                href: sendButton.href,
+                onclick: sendButton.onclick,
+                hasHref: !!sendButton.href
+            });
+
+            // Check if button has href (is a link)
+            if (sendButton.href) {
+                console.log('📎 Button is a link - modifying href');
+                const originalHref = sendButton.href;
+                const separator = originalHref.includes('?') ? '&' : '?';
+                const newHref = `${originalHref}${separator}automation_data=${encodedData}`;
+
+                console.log('🔗 Original URL:', originalHref);
+                console.log('🔗 Modified URL:', newHref);
+
+                sendButton.href = newHref;
+                sendButton.click();
+            } else {
+                console.log('🚫 Button is not a link - need to intercept Steam URL generation');
+
+                // Store data temporarily for the intercepted navigation
+                window.PENDING_AUTOMATION_DATA = encodedData;
+                console.log('💾 Stored automation data temporarily');
+
+                // Override window.open to intercept Steam URL
+                const originalWindowOpen = window.open;
+                window.open = function(url, target, features) {
+                    console.log('🌐 Intercepted window.open:', url);
+
+                    if (url && url.includes('steamcommunity.com')) {
+                        const separator = url.includes('?') ? '&' : '?';
+                        const modifiedUrl = `${url}${separator}automation_data=${window.PENDING_AUTOMATION_DATA}`;
+                        console.log('✅ Modified Steam URL:', modifiedUrl);
+
+                        // Clean up temporary data
+                        delete window.PENDING_AUTOMATION_DATA;
+
+                        // Restore original window.open
+                        window.open = originalWindowOpen;
+
+                        // Open the modified URL
+                        return originalWindowOpen.call(this, modifiedUrl, target, features);
+                    }
+
+                    // For non-Steam URLs, use original function
+                    return originalWindowOpen.call(this, url, target, features);
+                };
+
+                // Click the button to trigger the navigation
+                sendButton.click();
+
+                // Restore window.open after a short delay if not triggered
+                setTimeout(() => {
+                    if (window.PENDING_AUTOMATION_DATA) {
+                        console.log('⚠️ Timeout - restoring window.open');
+                        window.open = originalWindowOpen;
+                        delete window.PENDING_AUTOMATION_DATA;
+                    }
+                }, 5000);
+            }
+
+            console.log('✅ Button click initiated with data encoding');
+            this.logStep('Data encoded and button clicked - Steam page should receive data');
+            this.currentStep = 'waiting_for_steam_completion';
+        } else {
+            console.log('❌ "Send Items Now" button not found');
         }
     }
 
@@ -508,17 +660,19 @@ export class SellItemVerification {
         }
 
         console.log(`🔍 Looking for item: ${this.collectedData.itemName}`);
+        console.log(`📍 Target position: ${this.collectedData.itemPosition}`);
+        console.log(`📄 Current page URL: ${window.location.href}`);
 
         // Look for Steam inventory items with multiple selectors
-        let inventoryItems = document.querySelectorAll('[id^="item730_"]');
+        console.log('🔍 Searching for inventory items...');
+        let inventoryItems = document.querySelectorAll('.item');
+        console.log(`🎮 CS:GO items found: ${inventoryItems.length}`);
 
-        // If CS:GO items not found, try broader selectors
-        if (inventoryItems.length === 0) {
-            inventoryItems = document.querySelectorAll('.item, .inventory_item, [class*="item"]');
-            console.log(`📦 Found ${inventoryItems.length} items with broader selector`);
-        } else {
-            console.log(`📦 Found ${inventoryItems.length} CS:GO inventory items`);
-        }
+        // Log page structure for debugging
+        console.log('🏗️ Page structure analysis:');
+        console.log('- Inventory containers:', document.querySelectorAll('[class*="inventory"], [id*="inventory"]').length);
+        console.log('- Item containers:', document.querySelectorAll('[class*="item"], [id*="item"]').length);
+        console.log('- Trade elements:', document.querySelectorAll('[class*="trade"], [id*="trade"]').length);
 
         if (inventoryItems.length === 0) {
             console.log('❌ No inventory items found, waiting...');
@@ -529,51 +683,130 @@ export class SellItemVerification {
 
         if (targetItem) {
             console.log('✅ Found target item, double-clicking');
-            console.log('Target item element:', targetItem);
-            this.doubleClickElement(targetItem);
+            console.log('🎯 Target item details:', {
+                element: targetItem,
+                title: targetItem.getAttribute('title') || '',
+                alt: targetItem.querySelector('img')?.getAttribute('alt') || '',
+                className: targetItem.className,
+                position: Array.from(inventoryItems).indexOf(targetItem) + 1
+            });
+
+            // Scroll item into view first
+            targetItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+            // Wait a moment for scroll, then double-click
+            setTimeout(() => {
+                console.log('🖱️ Executing double-click on target item...');
+                this.doubleClickElement(targetItem);
+                this.logStep('Double-clicked target item');
+            }, 500);
+
             this.currentStep = 'confirm_trade';
-            this.logStep('Double-clicked target item');
         } else {
             console.log('❌ Target item not found on current page');
-            console.log('Available items for debugging:');
-            Array.from(inventoryItems).slice(0, 5).forEach((item, index) => {
-                const title = item.getAttribute('title') || '';
-                const alt = item.querySelector('img')?.getAttribute('alt') || '';
-                console.log(`Item ${index + 1}: title="${title}", alt="${alt}"`);
-            });
+            console.log(`🎯 Looking for: "${this.collectedData.itemName}" at position ${this.collectedData.itemPosition}`);
             this.logStep('Target item not found on current page');
         }
     }
 
     findTargetItem(inventoryItems) {
         const targetName = this.collectedData.itemName;
+        const targetPage = this.collectedData.inventoryPage;
         const targetPosition = this.collectedData.itemPosition;
+        const absoloutePosition = (targetPage - 1) * 16 + targetPosition;
+        console.log(this.collectedData);
+        console.log(targetName, targetPage, targetPosition, absoloutePosition)
+
+        console.log(`🎯 Searching for target item: "${targetName}" at position ${targetPosition}`);
+        console.log(`📊 Total inventory items to search: ${inventoryItems.length}`);
 
         // Method 1: Try to match by name/title
-        for (let item of inventoryItems) {
-            const title = item.getAttribute('title') || '';
-            const alt = item.querySelector('img')?.getAttribute('alt') || '';
+        // console.log('🔍 Method 1: Searching by name/title...');
+        // for (let i = 0; i < inventoryItems.length; i++) {
+        //     const item = inventoryItems[i];
+        //     const title = item.getAttribute('title') || '';
+        //     const alt = item.querySelector('img')?.getAttribute('alt') || '';
+        //     const dataname = item.getAttribute('data-name') || '';
 
-            if (title.includes(targetName) || alt.includes(targetName)) {
-                return item;
-            }
-        }
+        //     if (i < 5) { // Log first 5 items for debugging
+        //         console.log(`Item ${i + 1}: title="${title}", alt="${alt}", data-name="${dataname}"`);
+        //     }
+
+        //     if (title.includes(targetName) || alt.includes(targetName) || dataname.includes(targetName)) {
+        //         console.log(`✅ Found target item by name at position ${i + 1}:`, {
+        //             title, alt, dataname, element: item
+        //         });
+        //         return item;
+        //     }
+        // }
+
+        // console.log('❌ Target item not found by name, trying position-based search...');
 
         // Method 2: Try to match by grid position
-        if (targetPosition && targetPosition <= inventoryItems.length) {
-            return inventoryItems[targetPosition - 1]; // Convert to 0-based index
+        console.log(`🔍 Method 2: Searching by position ${targetPosition}...`);
+        console.log(absoloutePosition, inventoryItems.length, absoloutePosition <= inventoryItems.length && absoloutePosition > 0)
+        if (absoloutePosition <= inventoryItems.length && absoloutePosition > 0) {
+            console.log("Target position is valid.");
+            const item = inventoryItems[absoloutePosition - 1]; // Convert to 0-based index
+            const title = item.getAttribute('title') || '';
+            const alt = item.querySelector('img')?.getAttribute('alt') || '';
+            console.log(`📍 Found item at position ${targetPosition}, absolute position ${absoloutePosition}:`, {
+                title, alt, element: item
+            });
+            return item;
         }
 
+        console.log('❌ Target item not found by position or name');
         return null;
     }
 
     doubleClickElement(element) {
-        // Create double-click event
-        const event1 = new MouseEvent('click', { bubbles: true, cancelable: true });
-        const event2 = new MouseEvent('click', { bubbles: true, cancelable: true });
+        console.log('🖱️ Starting double-click sequence...');
 
-        element.dispatchEvent(event1);
-        setTimeout(() => element.dispatchEvent(event2), 100);
+        // Create more comprehensive mouse events
+        const rect = element.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+
+        const mouseEventOptions = {
+            bubbles: true,
+            cancelable: true,
+            clientX: x,
+            clientY: y,
+            button: 0,
+            buttons: 1
+        };
+
+        // Try multiple event approaches for maximum compatibility
+        try {
+            // Method 1: Traditional double-click event
+            const dblClickEvent = new MouseEvent('dblclick', mouseEventOptions);
+            element.dispatchEvent(dblClickEvent);
+            console.log('✅ Dispatched dblclick event');
+
+            // Method 2: Two click events with proper timing
+            setTimeout(() => {
+                const clickEvent1 = new MouseEvent('click', mouseEventOptions);
+                element.dispatchEvent(clickEvent1);
+                console.log('✅ Dispatched first click event');
+
+                setTimeout(() => {
+                    const clickEvent2 = new MouseEvent('click', mouseEventOptions);
+                    element.dispatchEvent(clickEvent2);
+                    console.log('✅ Dispatched second click event');
+                }, 50);
+            }, 100);
+
+            // Method 3: Direct click() if it's available
+            if (typeof element.click === 'function') {
+                setTimeout(() => {
+                    element.click();
+                    console.log('✅ Called element.click()');
+                }, 200);
+            }
+        } catch (error) {
+            console.error('❌ Error during double-click:', error);
+        }
     }
 
     // Step 4: Trade Confirmation
@@ -585,146 +818,62 @@ export class SellItemVerification {
             return;
         }
 
-        // Check for various Steam trade confirmation elements
-        this.checkTradeConfirmationSteps();
-    }
+            // Check for various Steam trade confirmation elements
+            this.checkTradeConfirmationSteps();
+        }
 
-    checkTradeConfirmationSteps() {
+        checkTradeConfirmationSteps() {
+            const waitAndClick = (selector, label, delay = 1000) => {
+            const checkInterval = 300; // how often to check for the element
+            let attempts = 0;
+            const maxAttempts = 20; // ~6s max wait
+
+            const interval = setInterval(() => {
+                const el = document.querySelector(selector);
+                attempts++;
+
+                if (el) {
+                    clearInterval(interval);
+                    console.log(`✅ Found ${label}`);
+                    setTimeout(() => {
+                        el.click();
+                        this.logStep(`Clicked ${label}`, el);
+                    }, delay);
+                } else if (attempts >= maxAttempts) {
+                    clearInterval(interval);
+                    console.log(`❌ Timed out waiting for ${label}`);
+                }
+            }, checkInterval);
+        };
         // Step 4a: Initial trade contents confirmation
-        const confirmTradeElement = document.querySelector('div.content');
-        if (confirmTradeElement && confirmTradeElement.textContent.includes('Click here to confirm trade contents')) {
-            console.log('✅ Found trade contents confirmation');
-            confirmTradeElement.click();
-            this.logStep('Clicked trade confirmation');
-            return;
-        }
+        waitAndClick('#you_notready', 'trade confirmation', 1000);
 
-        // Step 4b: Look for "Ready to trade" or similar confirmation
-        const readyButton = this.findTradeReadyButton();
-        if (readyButton) {
-            console.log('✅ Found trade ready button');
-            readyButton.click();
-            this.logStep('Clicked trade ready button');
-            return;
-        }
-
-        // Step 4c: Gift confirmation dialog
-        const giftButton = this.findGiftConfirmationButton();
-        if (giftButton) {
-            console.log('✅ Found gift confirmation button');
-            giftButton.click();
-            this.logStep('Confirmed gift trade');
-            return;
-        }
+        // Step 4b: Look for "Yes this is a gift" or similar confirmation
+        waitAndClick('.btn_green_steamui.btn_medium', 'trade ready button', 3000);
 
         // Step 4d: Final make offer button
-        const makeOfferButton = this.findMakeOfferButton();
-        if (makeOfferButton) {
-            console.log('✅ Found make offer button');
-            makeOfferButton.click();
-            this.logStep('Clicked Make Offer button');
-            this.currentStep = 'complete';
-            return;
-        }
+        waitAndClick('#trade_confirmbtn', 'Make Offer button', 5000);
 
-        // Step 4e: Check for trade completion confirmation
-        if (this.checkTradeCompletion()) {
-            console.log('✅ Trade appears to be completed');
-            this.currentStep = 'complete';
-            return;
-        }
+        setTimeout(() => {
+            const okSpan = Array.from(document.querySelectorAll('span'))
+                .find(el => el.textContent.trim() === 'OK');
+
+            if (okSpan) {
+                okSpan.click(); // try clicking the span itself
+                console.log('✅ Clicked span with text "OK"');
+
+                // If only the parent is clickable (common in Steam UI):
+                if (okSpan.parentElement) {
+                    okSpan.click();
+                    console.log('✅ Clicked parent of span with text "OK"');
+                }
+            } else {
+                console.log('❌ No span with text "OK" found');
+            }
+        }, 7000);
 
         // Step 4f: Check for any error messages
         this.checkForTradeErrors();
-    }
-
-    findTradeReadyButton() {
-        // Look for various "ready" button patterns
-        const selectors = [
-            'div[class*="ready"]',
-            'button[class*="ready"]',
-            'div.btn_green_steamui',
-            'span:contains("Ready")',
-            'div:contains("Ready to trade")'
-        ];
-
-        for (let selector of selectors) {
-            const element = document.querySelector(selector);
-            if (element && element.textContent.toLowerCase().includes('ready')) {
-                return element;
-            }
-        }
-
-        return null;
-    }
-
-    findGiftConfirmationButton() {
-        // Look for gift confirmation buttons
-        const giftButtons = document.querySelectorAll('div.btn_green_steamui span, button span, div[class*="button"] span');
-
-        for (let button of giftButtons) {
-            const text = button.textContent.toLowerCase();
-            if (text.includes('yes') && (text.includes('gift') || text.includes('present'))) {
-                return button.closest('div, button');
-            }
-        }
-
-        return null;
-    }
-
-    findMakeOfferButton() {
-        // Look for make offer button with multiple selectors
-        const selectors = [
-            '#trade_confirmbtn',
-            'button[id*="confirm"]',
-            'div[id*="confirm"]',
-            'button:contains("Make Offer")',
-            'div:contains("Make Offer")',
-            '.btn_green_steamui'
-        ];
-
-        for (let selector of selectors) {
-            const element = document.querySelector(selector);
-            if (element) {
-                const text = element.textContent.toLowerCase();
-                if (text.includes('make') && text.includes('offer') ||
-                    text.includes('confirm') ||
-                    text.includes('send')) {
-                    return element;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    checkTradeCompletion() {
-        // Check for trade completion indicators
-        const completionIndicators = [
-            'Trade Offer Sent',
-            'trade offer has been sent',
-            'Your trade offer is being held',
-            'Trade offer pending',
-            'successfully sent'
-        ];
-
-        const pageText = document.body.textContent.toLowerCase();
-
-        for (let indicator of completionIndicators) {
-            if (pageText.includes(indicator.toLowerCase())) {
-                this.logStep(`Trade completion detected: ${indicator}`);
-                return true;
-            }
-        }
-
-        // Check for success URLs
-        const url = window.location.href;
-        if (url.includes('tradeoffer') && url.includes('sent')) {
-            this.logStep('Trade completion detected via URL');
-            return true;
-        }
-
-        return false;
     }
 
     checkForTradeErrors() {
@@ -765,25 +914,16 @@ export class SellItemVerification {
 
     checkSteamCompletion() {
         // Check if the Steam tab has completed the automation
-        const state = this.loadState();
-        if (!state || !state.isActive) {
-            console.log('Steam automation appears to be completed');
-            this.currentStep = 'complete';
-        } else {
-            console.log('Still waiting for Steam tab to complete...');
-        }
+        // Note: Since we no longer use localStorage, this method assumes completion
+        console.log('Steam automation completion check - assuming completed (no localStorage)');
+        this.currentStep = 'complete';
     }
 
     completeVerification() {
         this.logTradeCompletion();
-        this.currentStep = 'idle';
-        this.clearState(); // Clear state when trade is complete
+        this.resetForNextTrade();
         console.log('Trade verification completed successfully');
 
-        // Reset for next trade
-        setTimeout(() => {
-            this.resetForNextTrade();
-        }, 2000);
     }
 
     // Utility methods
@@ -807,8 +947,8 @@ export class SellItemVerification {
     }
 
     resetForNextTrade() {
-        this.collectedData = {};
-        this.currentStep = 'waiting_for_trade_popup';
+        this.stop();
+        this.start();
         console.log('Reset for next trade verification');
     }
 
