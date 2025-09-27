@@ -105,7 +105,7 @@ export class SellItemVerification {
     // Automation manager lifecycle methods
     start() {
         this.isRunning = true;
-        this.currentStep = 'wait_for_continue'; // Keep for debug purposes
+        this.currentStep = 'waiting_for_trade_popup'; // Start with proper first step
         this.saveState(); // Save state when starting
         this.startStepMonitoring();
         console.log('SellItemVerification automation started');
@@ -171,6 +171,10 @@ export class SellItemVerification {
                 break;
             case 'send_items':
                 this.step2_SendItems();
+                break;
+            case 'waiting_for_steam_completion':
+                // Wait for Steam tab to complete, monitor for completion via localStorage
+                this.checkSteamCompletion();
                 break;
             case 'navigate_inventory':
                 this.step3_NavigateInventory();
@@ -292,13 +296,34 @@ export class SellItemVerification {
         if (sendButton) {
             console.log('Found "Send Items Now" button');
 
-            // Save state before navigation to Steam page
+            // IMPORTANT: Set the step for Steam page BEFORE saving state
             this.currentStep = 'navigate_inventory';
-            this.saveState();
+            this.isRunning = true; // Ensure it stays active
+            this.saveState(); // This will save navigate_inventory step
             this.logStep('Clicked "Send Items Now" button - state saved for Steam page');
+
+            // Check if button opens in new tab by checking target attribute
+            console.log('Button element:', sendButton);
+            console.log('Button href:', sendButton.href);
+            console.log('Button target:', sendButton.target);
 
             // Click button (this will navigate to Steam page and create new script instance)
             sendButton.click();
+
+            // Monitor for new tab/window opening
+            setTimeout(() => {
+                if (this.isSteamPage()) {
+                    console.log('Successfully navigated to Steam page');
+                } else {
+                    console.log('Still on CSGORoll page - button may have opened new tab');
+                    console.log('Current URL:', window.location.href);
+
+                    // The Steam page should pick up the saved state automatically
+                    // Keep the current page automation in a waiting state
+                    this.currentStep = 'waiting_for_steam_completion';
+                    this.logStep('Waiting for Steam tab to complete the automation');
+                }
+            }, 3000);
         }
     }
 
@@ -436,6 +461,17 @@ export class SellItemVerification {
             makeOfferButton.click();
             this.logStep('Clicked Make Offer button');
             this.currentStep = 'complete';
+        }
+    }
+
+    checkSteamCompletion() {
+        // Check if the Steam tab has completed the automation
+        const state = this.loadState();
+        if (!state || !state.isActive) {
+            console.log('Steam automation appears to be completed');
+            this.currentStep = 'complete';
+        } else {
+            console.log('Still waiting for Steam tab to complete...');
         }
     }
 

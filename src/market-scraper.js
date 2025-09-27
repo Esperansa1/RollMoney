@@ -536,10 +536,14 @@ export class MarketItemScraper {
         if (this.sellItemVerification.hasRestorableState) {
             console.log('✅ Found restorable sell verification state, auto-continuing automation');
 
-            // Set appropriate step based on current page
+            // Set appropriate step based on current page (only if not already set correctly)
             if (this.sellItemVerification.isSteamPage()) {
-                console.log('✅ On Steam page - setting step to navigate_inventory');
-                this.sellItemVerification.currentStep = 'navigate_inventory';
+                console.log('✅ On Steam page - current step:', this.sellItemVerification.currentStep);
+                // Only override if we're in the wrong step
+                if (this.sellItemVerification.currentStep === 'wait_for_continue') {
+                    console.log('Correcting step from wait_for_continue to navigate_inventory');
+                    this.sellItemVerification.currentStep = 'navigate_inventory';
+                }
             }
 
             // Automatically start the automation manager with sell verification

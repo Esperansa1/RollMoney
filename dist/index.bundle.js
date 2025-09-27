@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "d3db0442";
+  window.ROLLMONEY_VERSION = "bb306883";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1268,7 +1268,7 @@ var RollMoney = (() => {
         // Automation manager lifecycle methods
         start() {
           this.isRunning = true;
-          this.currentStep = "wait_for_continue";
+          this.currentStep = "waiting_for_trade_popup";
           this.saveState();
           this.startStepMonitoring();
           console.log("SellItemVerification automation started");
@@ -1325,6 +1325,9 @@ var RollMoney = (() => {
               break;
             case "send_items":
               this.step2_SendItems();
+              break;
+            case "waiting_for_steam_completion":
+              this.checkSteamCompletion();
               break;
             case "navigate_inventory":
               this.step3_NavigateInventory();
@@ -1419,9 +1422,23 @@ var RollMoney = (() => {
           if (sendButton) {
             console.log('Found "Send Items Now" button');
             this.currentStep = "navigate_inventory";
+            this.isRunning = true;
             this.saveState();
             this.logStep('Clicked "Send Items Now" button - state saved for Steam page');
+            console.log("Button element:", sendButton);
+            console.log("Button href:", sendButton.href);
+            console.log("Button target:", sendButton.target);
             sendButton.click();
+            setTimeout(() => {
+              if (this.isSteamPage()) {
+                console.log("Successfully navigated to Steam page");
+              } else {
+                console.log("Still on CSGORoll page - button may have opened new tab");
+                console.log("Current URL:", window.location.href);
+                this.currentStep = "waiting_for_steam_completion";
+                this.logStep("Waiting for Steam tab to complete the automation");
+              }
+            }, 3e3);
           }
         }
         // Step 3: Steam Inventory Navigation
@@ -1526,6 +1543,15 @@ var RollMoney = (() => {
             makeOfferButton.click();
             this.logStep("Clicked Make Offer button");
             this.currentStep = "complete";
+          }
+        }
+        checkSteamCompletion() {
+          const state = this.loadState();
+          if (!state || !state.isActive) {
+            console.log("Steam automation appears to be completed");
+            this.currentStep = "complete";
+          } else {
+            console.log("Still waiting for Steam tab to complete...");
           }
         }
         completeVerification() {
@@ -3029,8 +3055,11 @@ var RollMoney = (() => {
           if (this.sellItemVerification.hasRestorableState) {
             console.log("\u2705 Found restorable sell verification state, auto-continuing automation");
             if (this.sellItemVerification.isSteamPage()) {
-              console.log("\u2705 On Steam page - setting step to navigate_inventory");
-              this.sellItemVerification.currentStep = "navigate_inventory";
+              console.log("\u2705 On Steam page - current step:", this.sellItemVerification.currentStep);
+              if (this.sellItemVerification.currentStep === "wait_for_continue") {
+                console.log("Correcting step from wait_for_continue to navigate_inventory");
+                this.sellItemVerification.currentStep = "navigate_inventory";
+              }
             }
             setTimeout(() => {
               try {
