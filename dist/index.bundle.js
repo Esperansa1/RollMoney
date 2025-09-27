@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "0e907b9f";
+  window.ROLLMONEY_VERSION = "c3e03d55";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1312,12 +1312,12 @@ var RollMoney = (() => {
         executeCurrentStep() {
           console.log(`\u{1F504} Executing step: ${this.currentStep}`);
           switch (this.currentStep) {
-            case "waiting_for_trade_popup":
-              this.step1_WaitForTradePopup();
-              break;
-            case "accept_trade_setup":
-              this.step1_AcceptTradeSetup();
-              break;
+            // case 'waiting_for_trade_popup':
+            //     this.step1_WaitForTradePopup();
+            //     break;
+            // case 'accept_trade_setup':
+            //     this.step1_AcceptTradeSetup();
+            //     break;
             case "wait_for_continue":
               this.step1_WaitForContinue();
               break;

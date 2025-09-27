@@ -159,12 +159,12 @@ export class SellItemVerification {
         console.log(`🔄 Executing step: ${this.currentStep}`);
 
         switch (this.currentStep) {
-            case 'waiting_for_trade_popup':
-                this.step1_WaitForTradePopup();
-                break;
-            case 'accept_trade_setup':
-                this.step1_AcceptTradeSetup();
-                break;
+            // case 'waiting_for_trade_popup':
+            //     this.step1_WaitForTradePopup();
+            //     break;
+            // case 'accept_trade_setup':
+            //     this.step1_AcceptTradeSetup();
+            //     break;
             case 'wait_for_continue':
                 this.step1_WaitForContinue();
                 break;
