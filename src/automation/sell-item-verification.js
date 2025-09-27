@@ -56,11 +56,48 @@ export class SellItemVerification {
             timestamp: Date.now()
         };
 
+        // Validate state before saving
+        const isValidState = this.validateState(state);
+        if (!isValidState) {
+            console.log('⚠️ State validation failed, not saving invalid state');
+            return;
+        }
+
         try {
             localStorage.setItem(this.stateKey, JSON.stringify(state));
+            console.log('✅ State saved successfully:', state);
         } catch (error) {
-            console.error('Failed to save automation state:', error);
+            console.error('❌ Failed to save automation state:', error);
         }
+    }
+
+    validateState(state) {
+        // Basic validation rules
+        if (!state.isActive) {
+            console.log('State validation: isActive is false');
+            return false;
+        }
+
+        if (state.currentStep === 'idle' || state.currentStep === 'wait_for_continue') {
+            console.log('State validation: currentStep is not ready for cross-page');
+            return false;
+        }
+
+        // If we're at navigate_inventory step, we should have collected data
+        if (state.currentStep === 'navigate_inventory') {
+            if (!state.collectedData || Object.keys(state.collectedData).length === 0) {
+                console.log('State validation: navigate_inventory step but no collected data');
+                return false;
+            }
+
+            if (!state.collectedData.itemName || state.collectedData.itemName === 'Unknown') {
+                console.log('State validation: missing or invalid item name');
+                return false;
+            }
+        }
+
+        console.log('✅ State validation passed');
+        return true;
     }
 
     loadState() {
@@ -227,29 +264,51 @@ export class SellItemVerification {
 
     // Step 2: Item Dialog Extraction
     step2_ExtractItemData() {
+        console.log('🔍 Step 2: Extracting item data from dialog');
+
         const modal = document.querySelector('mat-dialog-container');
-        if (!modal) return;
+        if (!modal) {
+            console.log('❌ No modal dialog found');
+            return;
+        }
+
+        console.log('✅ Modal dialog found, extracting data...');
 
         try {
             // Extract item category
             const categoryElement = modal.querySelector('span[data-test="item-subcategory"]');
             const itemCategory = categoryElement ? categoryElement.textContent.trim() : 'Unknown';
+            console.log('Item category:', itemCategory);
 
             // Extract item name from label title
             const labelElement = modal.querySelector('label[title]');
             const itemName = labelElement ? labelElement.getAttribute('title') : 'Unknown';
+            console.log('Item name:', itemName);
 
             // Extract item value
             const valueElement = modal.querySelector('span.currency-value');
             const itemValue = valueElement ? valueElement.textContent.trim() : 'Unknown';
+            console.log('Item value:', itemValue);
 
             // Extract inventory page number
             const pageText = modal.textContent || '';
             const pageMatch = pageText.match(/On page (\d+) of your Steam inventory/i);
             const inventoryPage = pageMatch ? parseInt(pageMatch[1]) : 1;
+            console.log('Inventory page:', inventoryPage);
 
             // Calculate item position in 4x4 grid
             const itemPosition = this.calculateItemPosition(modal);
+            console.log('Item position:', itemPosition);
+
+            // Validate that we got meaningful data
+            if (itemName === 'Unknown' || itemCategory === 'Unknown') {
+                console.log('⚠️ Warning: Some item data is missing');
+                // Log available elements for debugging
+                console.log('Available elements in modal:');
+                console.log('- Labels with title:', modal.querySelectorAll('label[title]'));
+                console.log('- Category elements:', modal.querySelectorAll('span[data-test="item-subcategory"]'));
+                console.log('- Value elements:', modal.querySelectorAll('span.currency-value'));
+            }
 
             // Store collected data
             this.collectedData = {
@@ -261,13 +320,13 @@ export class SellItemVerification {
                 timestamp: new Date().toISOString()
             };
 
-            console.log('Extracted item data:', this.collectedData);
+            console.log('✅ Successfully extracted item data:', this.collectedData);
             this.logStep('Extracted item data', this.collectedData);
             this.currentStep = 'send_items';
             this.saveState(); // Save state after data extraction
 
         } catch (error) {
-            console.error('Error extracting item data:', error);
+            console.error('❌ Error extracting item data:', error);
             this.logError(error);
         }
     }
@@ -333,7 +392,20 @@ export class SellItemVerification {
 
     // Step 3: Steam Inventory Navigation
     step3_NavigateInventory() {
-        console.log('Step 3: Steam Inventory Navigation - checking page elements');
+        console.log('🚢 Step 3: Steam Inventory Navigation - checking page elements');
+
+        if (!this.isSteamPage()) {
+            console.log('❌ Not on Steam page, cannot navigate inventory');
+            return;
+        }
+
+        // Check if we have collected data
+        if (!this.collectedData || Object.keys(this.collectedData).length === 0) {
+            console.log('❌ No collected data available for inventory navigation');
+            return;
+        }
+
+        console.log('📦 Looking for Steam inventory elements...');
 
         // Wait for new tab/page to load and check if we're on Steam inventory
         const pageControlCur = document.querySelector('#pagecontrol_cur');
@@ -342,20 +414,34 @@ export class SellItemVerification {
             const currentPage = parseInt(pageControlCur.textContent) || 1;
             const targetPage = this.collectedData.inventoryPage || 1;
 
-            console.log(`Steam inventory page detected. Current: ${currentPage}, Target: ${targetPage}`);
+            console.log(`✅ Steam inventory page detected. Current: ${currentPage}, Target: ${targetPage}`);
 
             if (currentPage !== targetPage) {
+                console.log(`📄 Need to navigate from page ${currentPage} to page ${targetPage}`);
                 this.navigateToPage(currentPage, targetPage);
             } else {
-                console.log(`Already on correct page ${targetPage}`);
+                console.log(`✅ Already on correct page ${targetPage}, proceeding to item selection`);
                 this.currentStep = 'select_item';
                 this.logStep(`Navigated to inventory page ${targetPage}`);
             }
         } else {
-            console.log('Steam inventory page control not found yet, waiting...');
-            // Check if we're on the right Steam domain but page hasn't loaded yet
-            if (this.isSteamPage()) {
-                console.log('On Steam domain but inventory not loaded yet');
+            console.log('⏳ Steam inventory page controls not found yet...');
+
+            // Check for other Steam page indicators
+            const inventoryArea = document.querySelector('#inventories');
+            const tradeOfferPage = document.querySelector('.newmodal');
+
+            if (inventoryArea) {
+                console.log('✅ Found inventory area, but no page controls');
+                // Assume we're on the right page and proceed
+                this.currentStep = 'select_item';
+                this.logStep('Found inventory area, proceeding to item selection');
+            } else if (tradeOfferPage) {
+                console.log('✅ Detected trade offer page, looking for inventory');
+                // We might be on a trade offer page, continue waiting
+            } else {
+                console.log('❓ On Steam domain but specific page type unclear');
+                console.log('URL:', window.location.href);
             }
         }
     }
@@ -379,23 +465,47 @@ export class SellItemVerification {
     }
 
     step3_SelectItem() {
-        // Look for Steam inventory items
-        const inventoryItems = document.querySelectorAll('[id^="item730_"]');
+        console.log('🎯 Step 3: Selecting target item in Steam inventory');
+
+        if (!this.collectedData || !this.collectedData.itemName) {
+            console.log('❌ No item data available for selection');
+            return;
+        }
+
+        console.log(`🔍 Looking for item: ${this.collectedData.itemName}`);
+
+        // Look for Steam inventory items with multiple selectors
+        let inventoryItems = document.querySelectorAll('[id^="item730_"]');
+
+        // If CS:GO items not found, try broader selectors
+        if (inventoryItems.length === 0) {
+            inventoryItems = document.querySelectorAll('.item, .inventory_item, [class*="item"]');
+            console.log(`📦 Found ${inventoryItems.length} items with broader selector`);
+        } else {
+            console.log(`📦 Found ${inventoryItems.length} CS:GO inventory items`);
+        }
 
         if (inventoryItems.length === 0) {
-            console.log('No inventory items found, waiting...');
+            console.log('❌ No inventory items found, waiting...');
             return;
         }
 
         const targetItem = this.findTargetItem(inventoryItems);
 
         if (targetItem) {
-            console.log('Found target item, double-clicking');
+            console.log('✅ Found target item, double-clicking');
+            console.log('Target item element:', targetItem);
             this.doubleClickElement(targetItem);
             this.currentStep = 'confirm_trade';
             this.logStep('Double-clicked target item');
         } else {
-            console.log('Target item not found on current page');
+            console.log('❌ Target item not found on current page');
+            console.log('Available items for debugging:');
+            Array.from(inventoryItems).slice(0, 5).forEach((item, index) => {
+                const title = item.getAttribute('title') || '';
+                const alt = item.querySelector('img')?.getAttribute('alt') || '';
+                console.log(`Item ${index + 1}: title="${title}", alt="${alt}"`);
+            });
             this.logStep('Target item not found on current page');
         }
     }

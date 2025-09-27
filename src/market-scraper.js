@@ -412,6 +412,10 @@ export class MarketItemScraper {
         buttonContainer.appendChild(manualTriggerButton);
         buttonContainer.appendChild(emergencyStopButton);
 
+        // Debug step controls
+        const debugSection = this.createDebugStepControls();
+        section.appendChild(debugSection);
+
         section.appendChild(title);
         section.appendChild(buttonContainer);
 
@@ -541,6 +545,130 @@ export class MarketItemScraper {
             console.error('Error during emergency stop:', error);
             UIComponents.showNotification('Error during emergency stop', 'error');
         }
+    }
+
+    createDebugStepControls() {
+        const debugSection = DOMUtils.createElement('div', {
+            marginTop: Theme.spacing.md,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+        });
+
+        const debugTitle = UIComponents.createLabel('Debug Step Controls', {
+            fontSize: Theme.typography.fontSize.md,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.sm
+        });
+
+        const debugButtonContainer = DOMUtils.createElement('div', {
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: Theme.spacing.sm
+        });
+
+        const extractDataBtn = UIComponents.createButton('Extract Data', 'warning', 'sm', () => {
+            this.handleDebugExtractData();
+        });
+
+        const sendItemsBtn = UIComponents.createButton('Send Items', 'warning', 'sm', () => {
+            this.handleDebugSendItems();
+        });
+
+        const navigateInventoryBtn = UIComponents.createButton('Navigate Inventory', 'warning', 'sm', () => {
+            this.handleDebugNavigateInventory();
+        });
+
+        const viewStateBtn = UIComponents.createButton('View State', 'info', 'sm', () => {
+            this.handleDebugViewState();
+        });
+
+        const injectTestDataBtn = UIComponents.createButton('Inject Test Data', 'info', 'sm', () => {
+            this.handleDebugInjectTestData();
+        });
+
+        debugButtonContainer.appendChild(extractDataBtn);
+        debugButtonContainer.appendChild(sendItemsBtn);
+        debugButtonContainer.appendChild(navigateInventoryBtn);
+        debugButtonContainer.appendChild(viewStateBtn);
+        debugButtonContainer.appendChild(injectTestDataBtn);
+
+        debugSection.appendChild(debugTitle);
+        debugSection.appendChild(debugButtonContainer);
+
+        return debugSection;
+    }
+
+    handleDebugExtractData() {
+        console.log("🔧 DEBUG: Manually triggering data extraction");
+        try {
+            this.sellItemVerification.step2_ExtractItemData();
+            UIComponents.showNotification('Data extraction triggered', 'info');
+        } catch (error) {
+            console.error('Debug extract data error:', error);
+            UIComponents.showNotification('Error in data extraction', 'error');
+        }
+    }
+
+    handleDebugSendItems() {
+        console.log("🔧 DEBUG: Manually triggering send items");
+        try {
+            this.sellItemVerification.step2_SendItems();
+            UIComponents.showNotification('Send items triggered', 'info');
+        } catch (error) {
+            console.error('Debug send items error:', error);
+            UIComponents.showNotification('Error in send items', 'error');
+        }
+    }
+
+    handleDebugNavigateInventory() {
+        console.log("🔧 DEBUG: Manually triggering navigate inventory");
+        try {
+            this.sellItemVerification.step3_NavigateInventory();
+            UIComponents.showNotification('Navigate inventory triggered', 'info');
+        } catch (error) {
+            console.error('Debug navigate inventory error:', error);
+            UIComponents.showNotification('Error in navigate inventory', 'error');
+        }
+    }
+
+    handleDebugViewState() {
+        console.log("🔧 DEBUG: Viewing current state");
+        const state = {
+            currentStep: this.sellItemVerification.currentStep,
+            isRunning: this.sellItemVerification.isRunning,
+            collectedData: this.sellItemVerification.collectedData,
+            hasRestorableState: this.sellItemVerification.hasRestorableState
+        };
+
+        console.log("Current automation state:", state);
+
+        const savedState = localStorage.getItem('sellItemVerificationState');
+        console.log("Saved localStorage state:", savedState);
+
+        UIComponents.showNotification('State logged to console', 'info');
+    }
+
+    handleDebugInjectTestData() {
+        console.log("🔧 DEBUG: Injecting test data");
+
+        const testData = {
+            itemName: "AK-47 | Redline (Field-Tested)",
+            itemCategory: "Rifle",
+            itemValue: "45.50 TKN",
+            inventoryPage: 1,
+            itemPosition: 3,
+            timestamp: new Date().toISOString()
+        };
+
+        this.sellItemVerification.collectedData = testData;
+        this.sellItemVerification.currentStep = 'navigate_inventory';
+        this.sellItemVerification.isRunning = true;
+        this.sellItemVerification.saveState();
+
+        console.log("Injected test data:", testData);
+        UIComponents.showNotification('Test data injected and state saved', 'success');
     }
 
     checkAndContinueSellVerification() {

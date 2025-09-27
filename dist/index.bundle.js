@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "c3e03d55";
+  window.ROLLMONEY_VERSION = "e6533a20";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1226,11 +1226,39 @@ var RollMoney = (() => {
             tradeLog: this.tradeLog,
             timestamp: Date.now()
           };
+          const isValidState = this.validateState(state);
+          if (!isValidState) {
+            console.log("\u26A0\uFE0F State validation failed, not saving invalid state");
+            return;
+          }
           try {
             localStorage.setItem(this.stateKey, JSON.stringify(state));
+            console.log("\u2705 State saved successfully:", state);
           } catch (error) {
-            console.error("Failed to save automation state:", error);
+            console.error("\u274C Failed to save automation state:", error);
           }
+        }
+        validateState(state) {
+          if (!state.isActive) {
+            console.log("State validation: isActive is false");
+            return false;
+          }
+          if (state.currentStep === "idle" || state.currentStep === "wait_for_continue") {
+            console.log("State validation: currentStep is not ready for cross-page");
+            return false;
+          }
+          if (state.currentStep === "navigate_inventory") {
+            if (!state.collectedData || Object.keys(state.collectedData).length === 0) {
+              console.log("State validation: navigate_inventory step but no collected data");
+              return false;
+            }
+            if (!state.collectedData.itemName || state.collectedData.itemName === "Unknown") {
+              console.log("State validation: missing or invalid item name");
+              return false;
+            }
+          }
+          console.log("\u2705 State validation passed");
+          return true;
         }
         loadState() {
           try {
@@ -1375,19 +1403,36 @@ var RollMoney = (() => {
         }
         // Step 2: Item Dialog Extraction
         step2_ExtractItemData() {
+          console.log("\u{1F50D} Step 2: Extracting item data from dialog");
           const modal = document.querySelector("mat-dialog-container");
-          if (!modal) return;
+          if (!modal) {
+            console.log("\u274C No modal dialog found");
+            return;
+          }
+          console.log("\u2705 Modal dialog found, extracting data...");
           try {
             const categoryElement = modal.querySelector('span[data-test="item-subcategory"]');
             const itemCategory = categoryElement ? categoryElement.textContent.trim() : "Unknown";
+            console.log("Item category:", itemCategory);
             const labelElement = modal.querySelector("label[title]");
             const itemName = labelElement ? labelElement.getAttribute("title") : "Unknown";
+            console.log("Item name:", itemName);
             const valueElement = modal.querySelector("span.currency-value");
             const itemValue = valueElement ? valueElement.textContent.trim() : "Unknown";
+            console.log("Item value:", itemValue);
             const pageText = modal.textContent || "";
             const pageMatch = pageText.match(/On page (\d+) of your Steam inventory/i);
             const inventoryPage = pageMatch ? parseInt(pageMatch[1]) : 1;
+            console.log("Inventory page:", inventoryPage);
             const itemPosition = this.calculateItemPosition(modal);
+            console.log("Item position:", itemPosition);
+            if (itemName === "Unknown" || itemCategory === "Unknown") {
+              console.log("\u26A0\uFE0F Warning: Some item data is missing");
+              console.log("Available elements in modal:");
+              console.log("- Labels with title:", modal.querySelectorAll("label[title]"));
+              console.log("- Category elements:", modal.querySelectorAll('span[data-test="item-subcategory"]'));
+              console.log("- Value elements:", modal.querySelectorAll("span.currency-value"));
+            }
             this.collectedData = {
               itemName,
               itemCategory,
@@ -1396,12 +1441,12 @@ var RollMoney = (() => {
               itemPosition,
               timestamp: (/* @__PURE__ */ new Date()).toISOString()
             };
-            console.log("Extracted item data:", this.collectedData);
+            console.log("\u2705 Successfully extracted item data:", this.collectedData);
             this.logStep("Extracted item data", this.collectedData);
             this.currentStep = "send_items";
             this.saveState();
           } catch (error) {
-            console.error("Error extracting item data:", error);
+            console.error("\u274C Error extracting item data:", error);
             this.logError(error);
           }
         }
@@ -1446,23 +1491,42 @@ var RollMoney = (() => {
         }
         // Step 3: Steam Inventory Navigation
         step3_NavigateInventory() {
-          console.log("Step 3: Steam Inventory Navigation - checking page elements");
+          console.log("\u{1F6A2} Step 3: Steam Inventory Navigation - checking page elements");
+          if (!this.isSteamPage()) {
+            console.log("\u274C Not on Steam page, cannot navigate inventory");
+            return;
+          }
+          if (!this.collectedData || Object.keys(this.collectedData).length === 0) {
+            console.log("\u274C No collected data available for inventory navigation");
+            return;
+          }
+          console.log("\u{1F4E6} Looking for Steam inventory elements...");
           const pageControlCur = document.querySelector("#pagecontrol_cur");
           if (pageControlCur) {
             const currentPage = parseInt(pageControlCur.textContent) || 1;
             const targetPage = this.collectedData.inventoryPage || 1;
-            console.log(`Steam inventory page detected. Current: ${currentPage}, Target: ${targetPage}`);
+            console.log(`\u2705 Steam inventory page detected. Current: ${currentPage}, Target: ${targetPage}`);
             if (currentPage !== targetPage) {
+              console.log(`\u{1F4C4} Need to navigate from page ${currentPage} to page ${targetPage}`);
               this.navigateToPage(currentPage, targetPage);
             } else {
-              console.log(`Already on correct page ${targetPage}`);
+              console.log(`\u2705 Already on correct page ${targetPage}, proceeding to item selection`);
               this.currentStep = "select_item";
               this.logStep(`Navigated to inventory page ${targetPage}`);
             }
           } else {
-            console.log("Steam inventory page control not found yet, waiting...");
-            if (this.isSteamPage()) {
-              console.log("On Steam domain but inventory not loaded yet");
+            console.log("\u23F3 Steam inventory page controls not found yet...");
+            const inventoryArea = document.querySelector("#inventories");
+            const tradeOfferPage = document.querySelector(".newmodal");
+            if (inventoryArea) {
+              console.log("\u2705 Found inventory area, but no page controls");
+              this.currentStep = "select_item";
+              this.logStep("Found inventory area, proceeding to item selection");
+            } else if (tradeOfferPage) {
+              console.log("\u2705 Detected trade offer page, looking for inventory");
+            } else {
+              console.log("\u2753 On Steam domain but specific page type unclear");
+              console.log("URL:", window.location.href);
             }
           }
         }
@@ -1482,19 +1546,38 @@ var RollMoney = (() => {
           }
         }
         step3_SelectItem() {
-          const inventoryItems = document.querySelectorAll('[id^="item730_"]');
+          console.log("\u{1F3AF} Step 3: Selecting target item in Steam inventory");
+          if (!this.collectedData || !this.collectedData.itemName) {
+            console.log("\u274C No item data available for selection");
+            return;
+          }
+          console.log(`\u{1F50D} Looking for item: ${this.collectedData.itemName}`);
+          let inventoryItems = document.querySelectorAll('[id^="item730_"]');
           if (inventoryItems.length === 0) {
-            console.log("No inventory items found, waiting...");
+            inventoryItems = document.querySelectorAll('.item, .inventory_item, [class*="item"]');
+            console.log(`\u{1F4E6} Found ${inventoryItems.length} items with broader selector`);
+          } else {
+            console.log(`\u{1F4E6} Found ${inventoryItems.length} CS:GO inventory items`);
+          }
+          if (inventoryItems.length === 0) {
+            console.log("\u274C No inventory items found, waiting...");
             return;
           }
           const targetItem = this.findTargetItem(inventoryItems);
           if (targetItem) {
-            console.log("Found target item, double-clicking");
+            console.log("\u2705 Found target item, double-clicking");
+            console.log("Target item element:", targetItem);
             this.doubleClickElement(targetItem);
             this.currentStep = "confirm_trade";
             this.logStep("Double-clicked target item");
           } else {
-            console.log("Target item not found on current page");
+            console.log("\u274C Target item not found on current page");
+            console.log("Available items for debugging:");
+            Array.from(inventoryItems).slice(0, 5).forEach((item, index) => {
+              const title = item.getAttribute("title") || "";
+              const alt = item.querySelector("img")?.getAttribute("alt") || "";
+              console.log(`Item ${index + 1}: title="${title}", alt="${alt}"`);
+            });
             this.logStep("Target item not found on current page");
           }
         }
@@ -2958,6 +3041,8 @@ var RollMoney = (() => {
           buttonContainer.appendChild(stopButton);
           buttonContainer.appendChild(manualTriggerButton);
           buttonContainer.appendChild(emergencyStopButton);
+          const debugSection = this.createDebugStepControls();
+          section.appendChild(debugSection);
           section.appendChild(title);
           section.appendChild(buttonContainer);
           return section;
@@ -3060,6 +3145,108 @@ var RollMoney = (() => {
             console.error("Error during emergency stop:", error);
             UIComponents.showNotification("Error during emergency stop", "error");
           }
+        }
+        createDebugStepControls() {
+          const debugSection = DOMUtils.createElement("div", {
+            marginTop: Theme.spacing.md,
+            padding: Theme.spacing.md,
+            backgroundColor: Theme.colors.surfaceVariant,
+            borderRadius: Theme.borderRadius.md,
+            border: `1px solid ${Theme.colors.border}`
+          });
+          const debugTitle = UIComponents.createLabel("Debug Step Controls", {
+            fontSize: Theme.typography.fontSize.md,
+            fontWeight: Theme.typography.fontWeight.bold,
+            marginBottom: Theme.spacing.sm
+          });
+          const debugButtonContainer = DOMUtils.createElement("div", {
+            display: "flex",
+            flexWrap: "wrap",
+            gap: Theme.spacing.sm
+          });
+          const extractDataBtn = UIComponents.createButton("Extract Data", "warning", "sm", () => {
+            this.handleDebugExtractData();
+          });
+          const sendItemsBtn = UIComponents.createButton("Send Items", "warning", "sm", () => {
+            this.handleDebugSendItems();
+          });
+          const navigateInventoryBtn = UIComponents.createButton("Navigate Inventory", "warning", "sm", () => {
+            this.handleDebugNavigateInventory();
+          });
+          const viewStateBtn = UIComponents.createButton("View State", "info", "sm", () => {
+            this.handleDebugViewState();
+          });
+          const injectTestDataBtn = UIComponents.createButton("Inject Test Data", "info", "sm", () => {
+            this.handleDebugInjectTestData();
+          });
+          debugButtonContainer.appendChild(extractDataBtn);
+          debugButtonContainer.appendChild(sendItemsBtn);
+          debugButtonContainer.appendChild(navigateInventoryBtn);
+          debugButtonContainer.appendChild(viewStateBtn);
+          debugButtonContainer.appendChild(injectTestDataBtn);
+          debugSection.appendChild(debugTitle);
+          debugSection.appendChild(debugButtonContainer);
+          return debugSection;
+        }
+        handleDebugExtractData() {
+          console.log("\u{1F527} DEBUG: Manually triggering data extraction");
+          try {
+            this.sellItemVerification.step2_ExtractItemData();
+            UIComponents.showNotification("Data extraction triggered", "info");
+          } catch (error) {
+            console.error("Debug extract data error:", error);
+            UIComponents.showNotification("Error in data extraction", "error");
+          }
+        }
+        handleDebugSendItems() {
+          console.log("\u{1F527} DEBUG: Manually triggering send items");
+          try {
+            this.sellItemVerification.step2_SendItems();
+            UIComponents.showNotification("Send items triggered", "info");
+          } catch (error) {
+            console.error("Debug send items error:", error);
+            UIComponents.showNotification("Error in send items", "error");
+          }
+        }
+        handleDebugNavigateInventory() {
+          console.log("\u{1F527} DEBUG: Manually triggering navigate inventory");
+          try {
+            this.sellItemVerification.step3_NavigateInventory();
+            UIComponents.showNotification("Navigate inventory triggered", "info");
+          } catch (error) {
+            console.error("Debug navigate inventory error:", error);
+            UIComponents.showNotification("Error in navigate inventory", "error");
+          }
+        }
+        handleDebugViewState() {
+          console.log("\u{1F527} DEBUG: Viewing current state");
+          const state = {
+            currentStep: this.sellItemVerification.currentStep,
+            isRunning: this.sellItemVerification.isRunning,
+            collectedData: this.sellItemVerification.collectedData,
+            hasRestorableState: this.sellItemVerification.hasRestorableState
+          };
+          console.log("Current automation state:", state);
+          const savedState = localStorage.getItem("sellItemVerificationState");
+          console.log("Saved localStorage state:", savedState);
+          UIComponents.showNotification("State logged to console", "info");
+        }
+        handleDebugInjectTestData() {
+          console.log("\u{1F527} DEBUG: Injecting test data");
+          const testData = {
+            itemName: "AK-47 | Redline (Field-Tested)",
+            itemCategory: "Rifle",
+            itemValue: "45.50 TKN",
+            inventoryPage: 1,
+            itemPosition: 3,
+            timestamp: (/* @__PURE__ */ new Date()).toISOString()
+          };
+          this.sellItemVerification.collectedData = testData;
+          this.sellItemVerification.currentStep = "navigate_inventory";
+          this.sellItemVerification.isRunning = true;
+          this.sellItemVerification.saveState();
+          console.log("Injected test data:", testData);
+          UIComponents.showNotification("Test data injected and state saved", "success");
         }
         checkAndContinueSellVerification() {
           console.log("=== CHECKING SELL VERIFICATION STATE ===");
