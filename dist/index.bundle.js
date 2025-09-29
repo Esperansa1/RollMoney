@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "ed6eeb26";
+  window.ROLLMONEY_VERSION = "c7e82498";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -2368,9 +2368,9 @@ var RollMoney = (() => {
               }
             }, checkInterval);
           };
-          waitAndClick("#you_notready", "trade confirmation", 1e3);
-          waitAndClick(".btn_green_steamui.btn_medium", "trade ready button", 3e3);
-          waitAndClick("#trade_confirmbtn", "Make Offer button", 5e3);
+          waitAndClick("#you_notready", "trade confirmation", 2e3);
+          waitAndClick(".btn_green_steamui.btn_medium", "trade ready button", 6e3);
+          waitAndClick("#trade_confirmbtn", "Make Offer button", 1e4);
           setTimeout(() => {
             const okSpan = Array.from(document.querySelectorAll("span")).find((el) => el.textContent.trim() === "OK");
             if (okSpan) {
@@ -2383,7 +2383,7 @@ var RollMoney = (() => {
             } else {
               console.log('\u274C No span with text "OK" found');
             }
-          }, 7e3);
+          }, 14e3);
           this.checkForTradeErrors();
         }
         checkForTradeErrors() {

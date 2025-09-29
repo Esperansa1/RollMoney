@@ -862,13 +862,13 @@ export class SellItemVerification {
             }, checkInterval);
         };
         // Step 4a: Initial trade contents confirmation
-        waitAndClick('#you_notready', 'trade confirmation', 1000);
+        waitAndClick('#you_notready', 'trade confirmation', 2000);
 
         // Step 4b: Look for "Yes this is a gift" or similar confirmation
-        waitAndClick('.btn_green_steamui.btn_medium', 'trade ready button', 3000);
+        waitAndClick('.btn_green_steamui.btn_medium', 'trade ready button', 6000);
 
         // Step 4d: Final make offer button
-        waitAndClick('#trade_confirmbtn', 'Make Offer button', 5000);
+        waitAndClick('#trade_confirmbtn', 'Make Offer button', 10000);
 
         setTimeout(() => {
             const okSpan = Array.from(document.querySelectorAll('span'))
@@ -886,7 +886,7 @@ export class SellItemVerification {
             } else {
                 console.log('❌ No span with text "OK" found');
             }
-        }, 7000);
+        }, 14000);
 
         // Step 4f: Check for any error messages
         this.checkForTradeErrors();
