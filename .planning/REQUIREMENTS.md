@@ -43,11 +43,11 @@ Requirements for this bug-fix milestone. Each maps to roadmap phases.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FILT-01 | Phase 1 | Pending |
-| DRAG-01 | Phase 1 | Pending |
-| STALE-01 | Phase 2 | Pending |
-| SPEED-01 | Phase 3 | Pending |
-| SALES-01 | Phase 4 | Pending |
+| FILT-01 | Phase 1 - UI Fixes | Pending |
+| DRAG-01 | Phase 1 - UI Fixes | Pending |
+| STALE-01 | Phase 2 - Data Layer Correctness | Pending |
+| SPEED-01 | Phase 3 - Latency Reduction | Pending |
+| SALES-01 | Phase 4 - Sales Bot Trade Fix | Pending |
 
 **Coverage:**
 - v1 requirements: 5 total
@@ -56,4 +56,4 @@ Requirements for this bug-fix milestone. Each maps to roadmap phases.
 
 ---
 *Requirements defined: 2026-02-22*
-*Last updated: 2026-02-22 after initial definition*
+*Last updated: 2026-02-22 after roadmap creation*
