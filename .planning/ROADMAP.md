@@ -27,7 +27,10 @@ Decimal phases appear between their surrounding integers in numeric order.
   1. User changes the percentage value in the UI, clicks Apply, and the bot immediately uses the new threshold — the old 5.1% hardcoded value is never used again
   2. User can click and drag the overlay from any location on its surface (including labels, content areas, and empty space) and it moves with the cursor
   3. After dragging, the overlay stays at its new position across subsequent interactions
-**Plans**: TBD
+**Plans**: 1 plan
+
+Plans:
+- [ ] 01-01-PLAN.md — Fix FILT-01 (threshold wiring + validation) and DRAG-01 (full-surface drag)
 
 ### Phase 2: Data Layer Correctness
 **Goal**: The bot's active item list contains only items that are genuinely available for withdrawal
