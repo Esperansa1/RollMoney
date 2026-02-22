@@ -99,12 +99,16 @@ export class UIComponents {
         dragHandle.xOffset = xOffset;
         dragHandle.yOffset = yOffset;
 
+        const DRAG_EXCLUDED_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON', 'A']);
+
         const dragStart = (e) => {
+            // Do not start drag on interactive elements — they handle their own clicks
+            if (DRAG_EXCLUDED_TAGS.has(e.target.tagName)) return;
+            if (e.target.closest('button, input, textarea, select, a')) return;
+
             initialX = e.clientX - xOffset;
             initialY = e.clientY - yOffset;
-            if (e.target === dragHandle) {
-                isDragging = true;
-            }
+            isDragging = true;
         };
 
         const dragEnd = () => {
@@ -129,7 +133,7 @@ export class UIComponents {
             }
         };
 
-        DOMUtils.addEventListeners(dragHandle, { mousedown: dragStart });
+        DOMUtils.addEventListeners(overlay, { mousedown: dragStart });
         DOMUtils.addEventListeners(document, {
             mouseup: dragEnd,
             mousemove: drag
