@@ -281,12 +281,15 @@ export class MarketItemScraper {
             width: '60px',
             fontSize: Theme.typography.fontSize.xs
         }, {
-            min: '0.1',
+            min: '0',
             max: '100',
             step: '0.1',
             value: '5.0',
             id: 'sniper-price-threshold-input'
         });
+
+        // Initialize input from live ItemFilter value (source of truth)
+        thresholdInput.value = String(this.itemFilter.baseFilters.maxPercentageChange ?? 5.1);
 
         const thresholdPercent = UIComponents.createLabel('%', {
             marginBottom: '0',
@@ -294,20 +297,45 @@ export class MarketItemScraper {
         });
 
         const applyBtn = UIComponents.createButton('Apply', 'primary', 'sm', () => {
-            const newThreshold = parseFloat(thresholdInput.value) / 100;
+            const rawValue = thresholdInput.value.trim();
+
+            // Validation: empty field
+            if (rawValue === '') {
+                UIComponents.showNotification('Threshold cannot be empty', 'error');
+                return;
+            }
+
+            // Validation: use Number() (stricter than parseFloat — rejects '5abc')
+            const parsed = Number(rawValue);
+            if (isNaN(parsed)) {
+                UIComponents.showNotification('Invalid threshold: must be a number', 'error');
+                return;
+            }
+
+            // Validation: range 0–100
+            if (parsed < 0 || parsed > 100) {
+                UIComponents.showNotification('Threshold must be between 0 and 100', 'error');
+                return;
+            }
+
+            // Apply to ItemFilter — maxPercentageChange is in % (e.g., 5.1, not 0.051)
+            this.itemFilter.updateBaseFilters({ maxPercentageChange: parsed });
+
+            // Keep MarketMonitor in sync — its priceThreshold is a fraction (e.g., 0.051)
             const marketMonitor = this.automationManager.getAutomation('market-monitor');
             if (marketMonitor && marketMonitor.updatePriceThreshold) {
-                marketMonitor.updatePriceThreshold(newThreshold);
-
-                // Show confirmation
-                const originalText = applyBtn.textContent;
-                applyBtn.textContent = '✓ Applied';
-                applyBtn.style.backgroundColor = Theme.colors.success;
-                setTimeout(() => {
-                    applyBtn.textContent = originalText;
-                    applyBtn.style.backgroundColor = '';
-                }, 1500);
+                marketMonitor.updatePriceThreshold(parsed / 100);
             }
+
+            // Visual feedback
+            UIComponents.showNotification(`Threshold set to ${parsed}%`, 'success');
+            const originalText = applyBtn.textContent;
+            applyBtn.textContent = '✓ Applied';
+            applyBtn.style.backgroundColor = Theme.colors.success;
+            setTimeout(() => {
+                applyBtn.textContent = originalText;
+                applyBtn.style.backgroundColor = '';
+            }, 1500);
         });
 
         thresholdContainer.appendChild(thresholdLabel);
