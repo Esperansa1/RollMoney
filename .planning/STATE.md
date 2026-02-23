@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 Phase: 2 of 4 (Data Layer Correctness)
 Plan: 0 of TBD in current phase
 Status: Ready to plan
-Last activity: 2026-02-23 - Completed quick task 1: Fix stale items (Phase 2)
+Last activity: 2026-02-23 - Completed quick task 2: Sales bot trade fix (Phase 4 sequential trade-confirm chain)
 
 Progress: [██░░░░░░░░] 25%
 
@@ -51,16 +51,17 @@ None yet.
 
 ### Blockers/Concerns
 
-- Phase 4: Steam DOM selectors (`#you_notready`, `.btn_green_steamui.btn_medium`, `#trade_confirmbtn`) need live verification against a current Steam trade offer page before implementation — these selectors are the highest-risk unknown in the milestone.
+- Phase 4: Steam DOM selectors (`#you_notready`, `.btn_green_steamui.btn_medium`, `#trade_confirmbtn`) are now wired in the sequential chain (quick task 2) but still need live verification against a current Steam trade offer page — these selectors remain the highest-risk unknown in the milestone.
 
 ### Quick Tasks Completed
 
 | # | Description | Date | Commit | Directory |
 |---|-------------|------|--------|-----------|
 | 1 | Fix stale items (Phase 2) | 2026-02-23 | 24e28e3 | [1-fix-stale-items-phase-2](.planning/quick/1-fix-stale-items-phase-2/) |
+| 2 | Sales bot trade fix — sequential trade-confirm chain (Phase 4) | 2026-02-23 | 8e490e6 | [2-phase-4-sales-bot-trade-fix](.planning/quick/2-phase-4-sales-bot-trade-fix/) |
 
 ## Session Continuity
 
 Last session: 2026-02-23
-Stopped at: Quick task 1 complete — not-joinable error recovery implemented (STALE-01 partial)
+Stopped at: Quick task 2 complete — sequential trade-confirm chain + re-entry guards + timer fix (SALES-01 addressed)
 Resume file: .planning/phases/02-data-layer-correctness/02-CONTEXT.md
