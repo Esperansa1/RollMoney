@@ -588,7 +588,7 @@ export class AutomationTabs {
     updateMarketMonitorContent(container) {
         // Update the price threshold input to reflect current setting
         const thresholdInput = container.querySelector('#price-threshold-input');
-        if (thresholdInput) {
+        if (thresholdInput && document.activeElement !== thresholdInput) {
             const marketMonitor = this.automationManager.getAutomation('market-monitor');
             if (marketMonitor) {
                 const currentThreshold = (marketMonitor.settings.priceThreshold * 100).toFixed(1);

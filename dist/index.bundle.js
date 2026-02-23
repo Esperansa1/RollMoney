@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "39b0d96a";
+  window.ROLLMONEY_VERSION = "4d78e40f";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -3608,7 +3608,7 @@ var RollMoney = (() => {
         }
         updateMarketMonitorContent(container) {
           const thresholdInput = container.querySelector("#price-threshold-input");
-          if (thresholdInput) {
+          if (thresholdInput && document.activeElement !== thresholdInput) {
             const marketMonitor = this.automationManager.getAutomation("market-monitor");
             if (marketMonitor) {
               const currentThreshold = (marketMonitor.settings.priceThreshold * 100).toFixed(1);
