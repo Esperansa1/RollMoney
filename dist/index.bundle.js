@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "6647c882";
+  window.ROLLMONEY_VERSION = "694c9094";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -3651,6 +3651,17 @@ var RollMoney = (() => {
           this.automationManager.registerAutomation("market-monitor", this.marketMonitor);
           this.automationManager.registerAutomation("sell-item-verification", this.sellItemVerification);
           this.checkForSteamPageAutomation();
+          if (localStorage.getItem("sniper-auto-restart") === "1") {
+            localStorage.removeItem("sniper-auto-restart");
+            console.log("Auto-restart: sniper was running before reload \u2014 restarting in 2s...");
+            setTimeout(() => {
+              try {
+                this.handleStartSniper();
+              } catch (error) {
+                console.error("Auto-restart failed:", error);
+              }
+            }, 2e3);
+          }
           console.log("MarketScraper initialized on:", window.location.hostname);
           this.overlay = null;
           this.resultsArea = null;

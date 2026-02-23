@@ -30,6 +30,19 @@ export class MarketItemScraper {
         // Auto-start sell verification only if on Steam page with URL data
         this.checkForSteamPageAutomation();
 
+        // Auto-restart sniper if a page reload was triggered by a "not joinable" error
+        if (localStorage.getItem('sniper-auto-restart') === '1') {
+            localStorage.removeItem('sniper-auto-restart');
+            console.log('Auto-restart: sniper was running before reload — restarting in 2s...');
+            setTimeout(() => {
+                try {
+                    this.handleStartSniper();
+                } catch (error) {
+                    console.error('Auto-restart failed:', error);
+                }
+            }, 2000);
+        }
+
         // Debug: Log what's happening on page load
         console.log('MarketScraper initialized on:', window.location.hostname);
 
