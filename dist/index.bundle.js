@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "c2215819";
+  window.ROLLMONEY_VERSION = "482bda11";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1314,19 +1314,26 @@ var RollMoney = (() => {
         }
         _handleNewCard(card, retryCount = 0) {
           try {
-            const itemData = this.dataScraper.extractItemData(card);
-            if (!itemData.name || itemData.name === "N/A") return;
-            if (this.dataScraper.isItemProcessed(itemData.name)) return;
-            if (!card.querySelector("span.lh-16.fw-600.fs-10.ng-star-inserted")) {
-              if (retryCount < 3) {
+            const nameEl = card.querySelector('label[data-test="item-name"]');
+            const name = nameEl?.textContent?.trim();
+            if (!name || name === "N/A") return;
+            if (this.dataScraper.isItemProcessed(name)) return;
+            const percentageSpan = card.querySelector("span.lh-16.fw-600.fs-10.ng-star-inserted");
+            const percentageText = percentageSpan?.textContent?.trim() ?? "";
+            const percentageReady = /[+-]?\d/.test(percentageText);
+            if (!percentageReady) {
+              if (retryCount < 5) {
                 setTimeout(() => {
                   if (!this.isRunning) return;
-                  if (this.dataScraper.isItemProcessed(itemData.name)) return;
+                  if (this.dataScraper.isItemProcessed(name)) return;
                   this._handleNewCard(card, retryCount + 1);
-                }, 50);
+                }, 60);
               }
               return;
             }
+            const itemData = this.dataScraper.extractItemData(card);
+            if (!itemData.name || itemData.name === "N/A") return;
+            if (this.dataScraper.isItemProcessed(itemData.name)) return;
             const passes = this.itemFilter.filterItems([itemData]).length > 0;
             if (!passes) return;
             this.dataScraper.addProcessedItem(itemData.name);

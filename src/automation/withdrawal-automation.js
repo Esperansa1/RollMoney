@@ -82,26 +82,37 @@ export class WithdrawalAutomation {
 
     _handleNewCard(card, retryCount = 0) {
         try {
-            const itemData = this.dataScraper.extractItemData(card);
-
-            // Skip incomplete Angular renders — name is not yet hydrated
-            if (!itemData.name || itemData.name === 'N/A') return;
+            // Quick name check without full extraction
+            const nameEl = card.querySelector('label[data-test="item-name"]');
+            const name = nameEl?.textContent?.trim();
+            if (!name || name === 'N/A') return;
 
             // Dedup check: if already processed or in-flight, skip
-            if (this.dataScraper.isItemProcessed(itemData.name)) return;
+            if (this.dataScraper.isItemProcessed(name)) return;
 
-            // Skip if percentage span not rendered yet — retry up to 3 times (50ms apart)
-            // so Angular has time to hydrate the card before we filter on percentage
-            if (!card.querySelector('span.lh-16.fw-600.fs-10.ng-star-inserted')) {
-                if (retryCount < 3) {
+            // Wait for Angular to hydrate the percentage span AND its text content.
+            // Angular adds the span element first (empty), then fills in the value —
+            // so checking element existence alone is not enough.
+            const percentageSpan = card.querySelector('span.lh-16.fw-600.fs-10.ng-star-inserted');
+            const percentageText = percentageSpan?.textContent?.trim() ?? '';
+            const percentageReady = /[+-]?\d/.test(percentageText);
+
+            if (!percentageReady) {
+                if (retryCount < 5) {
                     setTimeout(() => {
                         if (!this.isRunning) return;
-                        if (this.dataScraper.isItemProcessed(itemData.name)) return;
+                        if (this.dataScraper.isItemProcessed(name)) return;
                         this._handleNewCard(card, retryCount + 1);
-                    }, 50);
+                    }, 60);
                 }
                 return;
             }
+
+            // Full extraction AFTER percentage is confirmed ready, so extractItemData
+            // reads the real percentage value (not the empty/default '0%')
+            const itemData = this.dataScraper.extractItemData(card);
+            if (!itemData.name || itemData.name === 'N/A') return;
+            if (this.dataScraper.isItemProcessed(itemData.name)) return;
 
             // Filter check: does this item pass the current filter config?
             const passes = this.itemFilter.filterItems([itemData]).length > 0;
