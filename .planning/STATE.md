@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-22)
 
 **Core value:** React to good market listings faster than a human can click — every millisecond saved between item detection and purchase matters.
-**Current focus:** Phase 1 - UI Fixes
+**Current focus:** Phase 2 - Data Layer Correctness
 
 ## Current Position
 
-Phase: 1 of 4 (UI Fixes)
+Phase: 2 of 4 (Data Layer Correctness)
 Plan: 0 of TBD in current phase
 Status: Ready to plan
-Last activity: 2026-02-22 — Roadmap created, 4 phases derived from 5 v1 requirements
+Last activity: 2026-02-23 — Phase 1 closed (FILT-01, DRAG-01 complete)
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 25%
 
 ## Performance Metrics
 
@@ -55,6 +55,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-02-22
-Stopped at: Roadmap written, STATE.md initialized — ready to plan Phase 1
-Resume file: None
+Last session: 2026-02-23
+Stopped at: Phase 2 context gathered — ready to plan Phase 2
+Resume file: .planning/phases/02-data-layer-correctness/02-CONTEXT.md
