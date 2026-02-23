@@ -12,7 +12,7 @@ See: .planning/PROJECT.md (updated 2026-02-22)
 Phase: 2 of 4 (Data Layer Correctness)
 Plan: 0 of TBD in current phase
 Status: Ready to plan
-Last activity: 2026-02-23 — Phase 1 closed (FILT-01, DRAG-01 complete)
+Last activity: 2026-02-23 - Completed quick task 1: Fix stale items (Phase 2)
 
 Progress: [██░░░░░░░░] 25%
 
@@ -52,6 +52,12 @@ None yet.
 ### Blockers/Concerns
 
 - Phase 4: Steam DOM selectors (`#you_notready`, `.btn_green_steamui.btn_medium`, `#trade_confirmbtn`) need live verification against a current Steam trade offer page before implementation — these selectors are the highest-risk unknown in the milestone.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Directory |
+|---|-------------|------|--------|-----------|
+| 1 | Fix stale items (Phase 2) | 2026-02-23 | 24e28e3 | [1-fix-stale-items-phase-2](.planning/quick/1-fix-stale-items-phase-2/) |
 
 ## Session Continuity
 
