@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "def3b270";
+  window.ROLLMONEY_VERSION = "c2215819";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1312,11 +1312,21 @@ var RollMoney = (() => {
             // No attributes:true — we only need childList to detect new item-card nodes
           });
         }
-        _handleNewCard(card) {
+        _handleNewCard(card, retryCount = 0) {
           try {
             const itemData = this.dataScraper.extractItemData(card);
             if (!itemData.name || itemData.name === "N/A") return;
             if (this.dataScraper.isItemProcessed(itemData.name)) return;
+            if (!card.querySelector("span.lh-16.fw-600.fs-10.ng-star-inserted")) {
+              if (retryCount < 3) {
+                setTimeout(() => {
+                  if (!this.isRunning) return;
+                  if (this.dataScraper.isItemProcessed(itemData.name)) return;
+                  this._handleNewCard(card, retryCount + 1);
+                }, 50);
+              }
+              return;
+            }
             const passes = this.itemFilter.filterItems([itemData]).length > 0;
             if (!passes) return;
             this.dataScraper.addProcessedItem(itemData.name);

@@ -80,7 +80,7 @@ export class WithdrawalAutomation {
         });
     }
 
-    _handleNewCard(card) {
+    _handleNewCard(card, retryCount = 0) {
         try {
             const itemData = this.dataScraper.extractItemData(card);
 
@@ -89,6 +89,19 @@ export class WithdrawalAutomation {
 
             // Dedup check: if already processed or in-flight, skip
             if (this.dataScraper.isItemProcessed(itemData.name)) return;
+
+            // Skip if percentage span not rendered yet — retry up to 3 times (50ms apart)
+            // so Angular has time to hydrate the card before we filter on percentage
+            if (!card.querySelector('span.lh-16.fw-600.fs-10.ng-star-inserted')) {
+                if (retryCount < 3) {
+                    setTimeout(() => {
+                        if (!this.isRunning) return;
+                        if (this.dataScraper.isItemProcessed(itemData.name)) return;
+                        this._handleNewCard(card, retryCount + 1);
+                    }, 50);
+                }
+                return;
+            }
 
             // Filter check: does this item pass the current filter config?
             const passes = this.itemFilter.filterItems([itemData]).length > 0;
