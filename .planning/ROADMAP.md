@@ -12,7 +12,7 @@ This milestone fixes 5 discrete broken features in an existing, running userscri
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: UI Fixes** - Wire percentage filter inputs and fix overlay drag from any point
+- [x] **Phase 1: UI Fixes** - Wire percentage filter inputs and fix overlay drag from any point
 - [ ] **Phase 2: Data Layer Correctness** - Remove stale/sold skins from the bot's active list
 - [ ] **Phase 3: Latency Reduction** - Minimize detection-to-click time now that data layer is correct
 - [ ] **Phase 4: Sales Bot Trade Fix** - Refactor Steam trade confirmation to sequential, non-stuck flow
@@ -30,7 +30,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 01-01-PLAN.md — Fix FILT-01 (threshold wiring + validation) and DRAG-01 (full-surface drag)
+- [x] 01-01-PLAN.md — Fix FILT-01 (threshold wiring + validation) and DRAG-01 (full-surface drag)
 
 ### Phase 2: Data Layer Correctness
 **Goal**: The bot's active item list contains only items that are genuinely available for withdrawal
@@ -70,7 +70,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. UI Fixes | 0/TBD | Not started | - |
+| 1. UI Fixes | 1/1 | Complete | 2026-02-22 |
 | 2. Data Layer Correctness | 0/TBD | Not started | - |
 | 3. Latency Reduction | 0/TBD | Not started | - |
 | 4. Sales Bot Trade Fix | 0/TBD | Not started | - |
