@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "694c9094";
+  window.ROLLMONEY_VERSION = "925de6e7";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1719,6 +1719,8 @@ var RollMoney = (() => {
           this.collectedData = {};
           this.tradeLog = [];
           this.stepTimeouts = /* @__PURE__ */ new Map();
+          this._tradeConfirmInProgress = false;
+          this._monitoringActive = false;
           this.id = "sell-item-verification";
           this.priority = 2;
           this.settings = {
@@ -1882,8 +1884,16 @@ var RollMoney = (() => {
         // Main monitoring loop
         startStepMonitoring() {
           if (!this.isRunning) return;
+          if (this._monitoringActive) {
+            console.warn("[SellItemVerification] startStepMonitoring() called while already active \u2014 ignoring duplicate start");
+            return;
+          }
+          this._monitoringActive = true;
           const monitor = () => {
-            if (!this.isRunning) return;
+            if (!this.isRunning) {
+              this._monitoringActive = false;
+              return;
+            }
             try {
               this.executeCurrentStep();
             } catch (error) {
@@ -2330,53 +2340,96 @@ var RollMoney = (() => {
             console.error("\u274C Error during double-click:", error);
           }
         }
-        // Step 4: Trade Confirmation
+        // Step 4: Trade Confirmation — entry point called by executeCurrentStep every 2000ms
         step4_ConfirmTrade() {
-          console.log("\u{1F91D} Step 4: Steam Trade Confirmation - checking trade dialog");
+          console.log("[step4_ConfirmTrade] called, isSteamPage:", this.isSteamPage(), "_tradeConfirmInProgress:", this._tradeConfirmInProgress);
           if (!this.isSteamPage()) {
-            console.log("\u274C Not on Steam page, cannot confirm trade");
+            console.log("[step4_ConfirmTrade] Not on Steam page \u2014 skipping");
             return;
           }
-          this.checkTradeConfirmationSteps();
+          if (this._tradeConfirmInProgress) {
+            console.log("[step4_ConfirmTrade] Trade confirm already in progress \u2014 skipping duplicate call");
+            return;
+          }
+          this._tradeConfirmInProgress = true;
+          console.log("[step4_ConfirmTrade] Starting sequential trade confirmation chain");
+          this._startSequentialTradeConfirm();
         }
-        checkTradeConfirmationSteps() {
-          const waitAndClick = (selector, label, delay = 1e3) => {
-            const checkInterval = 300;
-            let attempts = 0;
-            const maxAttempts = 20;
-            const interval = setInterval(() => {
-              const el = document.querySelector(selector);
-              attempts++;
-              if (el) {
-                clearInterval(interval);
-                console.log(`\u2705 Found ${label}`);
-                setTimeout(() => {
-                  el.click();
-                  this.logStep(`Clicked ${label}`, el);
-                }, delay);
-              } else if (attempts >= maxAttempts) {
-                clearInterval(interval);
-                console.log(`\u274C Timed out waiting for ${label}`);
-              }
-            }, checkInterval);
-          };
-          waitAndClick("#you_notready", "trade confirmation", 2e3);
-          waitAndClick(".btn_green_steamui.btn_medium", "trade ready button", 6e3);
-          waitAndClick("#trade_confirmbtn", "Make Offer button", 1e4);
-          setTimeout(() => {
-            const okSpan = Array.from(document.querySelectorAll("span")).find((el) => el.textContent.trim() === "OK");
-            if (okSpan) {
-              okSpan.click();
-              console.log('\u2705 Clicked span with text "OK"');
-              if (okSpan.parentElement) {
-                okSpan.click();
-                console.log('\u2705 Clicked parent of span with text "OK"');
-              }
-            } else {
-              console.log('\u274C No span with text "OK" found');
+        // Launches the sequential step chain: 4a → 4b → 4c → 4d
+        _startSequentialTradeConfirm() {
+          this._waitForAndClick("#you_notready", "step-4a (#you_notready)", 2e3, () => {
+            this._waitForAndClick(".btn_green_steamui.btn_medium", "step-4b (.btn_green_steamui.btn_medium)", 1500, () => {
+              this._waitForAndClick("#trade_confirmbtn", "step-4c (#trade_confirmbtn)", 1e3, () => {
+                this._waitForAndClickOkSpan("step-4d (OK span)", 500, () => {
+                  console.log("[trade-confirm] All 4 steps complete \u2014 marking currentStep = complete");
+                  this._tradeConfirmInProgress = false;
+                  this.currentStep = "complete";
+                });
+              });
+            });
+          });
+        }
+        // Generic sequential step: poll for selector, store interval handle, click on find, call onComplete
+        _waitForAndClick(selector, label, clickDelay, onComplete) {
+          const maxAttempts = 30;
+          let attempts = 0;
+          console.log(`[_waitForAndClick] Waiting for ${label} (max ${maxAttempts} attempts @ 300ms)`);
+          const intervalId = setInterval(() => {
+            attempts++;
+            const el = document.querySelector(selector);
+            console.log(`[_waitForAndClick] attempt ${attempts}/${maxAttempts} \u2014 selector "${selector}" found:`, !!el);
+            if (el) {
+              clearInterval(intervalId);
+              this.stepTimeouts.delete(intervalId);
+              console.log(`[_waitForAndClick] Found ${label} \u2014 clicking after ${clickDelay}ms delay`);
+              const clickTimerId = setTimeout(() => {
+                el.click();
+                this.logStep(`Clicked ${label}`, el);
+                console.log(`[_waitForAndClick] Clicked ${label} \u2014 invoking onComplete`);
+                onComplete();
+              }, clickDelay);
+              this.stepTimeouts.set(clickTimerId, clickTimerId);
+            } else if (attempts >= maxAttempts) {
+              clearInterval(intervalId);
+              this.stepTimeouts.delete(intervalId);
+              console.warn(`[_waitForAndClick] Timed out waiting for ${label} after ${attempts} attempts \u2014 trade chain halted`);
+              this._tradeConfirmInProgress = false;
             }
-          }, 14e3);
-          this.checkForTradeErrors();
+          }, 300);
+          this.stepTimeouts.set(intervalId, intervalId);
+        }
+        // Step 4d: find a <span> with exact text "OK" and click it (or its parent)
+        _waitForAndClickOkSpan(label, clickDelay, onComplete) {
+          const maxAttempts = 30;
+          let attempts = 0;
+          console.log(`[_waitForAndClickOkSpan] Waiting for ${label}`);
+          const intervalId = setInterval(() => {
+            attempts++;
+            const okSpan = Array.from(document.querySelectorAll("span")).find((el) => el.textContent.trim() === "OK");
+            console.log(`[_waitForAndClickOkSpan] attempt ${attempts}/${maxAttempts} \u2014 OK span found:`, !!okSpan);
+            if (okSpan) {
+              clearInterval(intervalId);
+              this.stepTimeouts.delete(intervalId);
+              console.log(`[_waitForAndClickOkSpan] Found OK span \u2014 clicking after ${clickDelay}ms delay`);
+              const clickTimerId = setTimeout(() => {
+                okSpan.click();
+                if (okSpan.parentElement) {
+                  okSpan.parentElement.click();
+                  console.log("[_waitForAndClickOkSpan] Also clicked parent of OK span");
+                }
+                this.logStep(`Clicked ${label}`, okSpan);
+                console.log(`[_waitForAndClickOkSpan] Clicked ${label} \u2014 invoking onComplete`);
+                onComplete();
+              }, clickDelay);
+              this.stepTimeouts.set(clickTimerId, clickTimerId);
+            } else if (attempts >= maxAttempts) {
+              clearInterval(intervalId);
+              this.stepTimeouts.delete(intervalId);
+              console.warn(`[_waitForAndClickOkSpan] Timed out waiting for ${label} \u2014 trade chain halted`);
+              this._tradeConfirmInProgress = false;
+            }
+          }, 300);
+          this.stepTimeouts.set(intervalId, intervalId);
         }
         checkForTradeErrors() {
           const errorIndicators = [
@@ -2425,8 +2478,14 @@ var RollMoney = (() => {
           });
         }
         clearAllTimeouts() {
-          this.stepTimeouts.forEach((timeout) => clearTimeout(timeout));
+          console.log(`[clearAllTimeouts] Cancelling ${this.stepTimeouts.size} tracked timers/intervals`);
+          this.stepTimeouts.forEach((id) => {
+            clearInterval(id);
+            clearTimeout(id);
+          });
           this.stepTimeouts.clear();
+          this._tradeConfirmInProgress = false;
+          this._monitoringActive = false;
         }
         resetForNextTrade() {
           this.stop();
