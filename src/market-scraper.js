@@ -438,9 +438,9 @@ export class MarketItemScraper {
         const statusGrid = document.getElementById('sniper-status-grid');
         if (!statusGrid) return;
 
-        // Update price threshold input to reflect current setting
+        // Update price threshold input to reflect current setting (skip if user is typing)
         const thresholdInput = document.getElementById('sniper-price-threshold-input');
-        if (thresholdInput) {
+        if (thresholdInput && document.activeElement !== thresholdInput) {
             const marketMonitor = this.automationManager.getAutomation('market-monitor');
             if (marketMonitor) {
                 const currentThreshold = (marketMonitor.settings.priceThreshold * 100).toFixed(1);

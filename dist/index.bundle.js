@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "4d78e40f";
+  window.ROLLMONEY_VERSION = "def3b270";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -4057,7 +4057,7 @@ var RollMoney = (() => {
           const statusGrid = document.getElementById("sniper-status-grid");
           if (!statusGrid) return;
           const thresholdInput = document.getElementById("sniper-price-threshold-input");
-          if (thresholdInput) {
+          if (thresholdInput && document.activeElement !== thresholdInput) {
             const marketMonitor = this.automationManager.getAutomation("market-monitor");
             if (marketMonitor) {
               const currentThreshold = (marketMonitor.settings.priceThreshold * 100).toFixed(1);
