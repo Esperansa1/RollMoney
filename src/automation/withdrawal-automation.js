@@ -8,15 +8,16 @@ export class WithdrawalAutomation {
         this.maxWithdrawRetries = 3;
         this.autoClearInterval = null;
         this.scanInterval = null;
+        this.domObserver = null;
         this.isRunning = false;
         this.isRefreshing = false;
 
         // Automation manager integration
         this.id = 'withdrawal-automation';
         this.priority = 1;
-        this.interval = 500;
+        this.interval = 10000;
         this.settings = {
-            scanInterval: 500,
+            scanInterval: 10000,
             autoClearSeconds: 5,
             enabled: true
         };
@@ -24,7 +25,7 @@ export class WithdrawalAutomation {
 
     // Automation manager lifecycle methods
     start() {
-        this.startPeriodicScan(this.settings.scanInterval);
+        this.startObservedScan();
     }
 
     stop() {
@@ -41,6 +42,68 @@ export class WithdrawalAutomation {
     resume() {
         if (!this.isRunning) {
             this.start();
+        }
+    }
+
+    startObservedScan() {
+        // Start fallback heartbeat poll at 10s (catches mutations missed by the observer,
+        // e.g. after Angular SPA navigation destroys and recreates the item list)
+        this.startPeriodicScan(10000);
+
+        // Primary: MutationObserver for near-zero detection latency
+        this.domObserver = new MutationObserver((mutations) => {
+            if (!this.isRunning) return;
+
+            for (const mutation of mutations) {
+                if (mutation.type !== 'childList') continue;
+
+                for (const node of mutation.addedNodes) {
+                    if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
+                    // Handle both: node IS .item-card, or node CONTAINS .item-card children
+                    // (Angular may add the host element rather than the .item-card directly)
+                    const cards = node.classList?.contains('item-card')
+                        ? [node]
+                        : Array.from(node.querySelectorAll('.item-card'));
+
+                    for (const card of cards) {
+                        this._handleNewCard(card);
+                    }
+                }
+            }
+        });
+
+        this.domObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+            // No attributes:true — we only need childList to detect new item-card nodes
+        });
+    }
+
+    _handleNewCard(card) {
+        try {
+            const itemData = this.dataScraper.extractItemData(card);
+
+            // Skip incomplete Angular renders — name is not yet hydrated
+            if (!itemData.name || itemData.name === 'N/A') return;
+
+            // Dedup check: if already processed or in-flight, skip
+            if (this.dataScraper.isItemProcessed(itemData.name)) return;
+
+            // Filter check: does this item pass the current filter config?
+            const passes = this.itemFilter.filterItems([itemData]).length > 0;
+            if (!passes) return;
+
+            // Mark processed SYNCHRONOUSLY before any await to prevent duplicate processing
+            // if the observer fires a second time for the same node before processItemFast resolves
+            this.dataScraper.addProcessedItem(itemData.name);
+
+            // Fire withdrawal attempt (fire-and-forget; processItemFast handles its own errors)
+            this.processItemFast(itemData, 0).catch(err =>
+                console.error(`Observer: error processing ${itemData.name}:`, err)
+            );
+        } catch (err) {
+            console.error('Observer: _handleNewCard error:', err);
         }
     }
 
@@ -64,13 +127,18 @@ export class WithdrawalAutomation {
             }
         }, intervalMs);
 
-        this.startAutoClear(5);
+        this.startAutoClear(30);
     }
 
     stopPeriodicScan() {
         if (this.scanInterval) {
             clearInterval(this.scanInterval);
             this.scanInterval = null;
+        }
+        // Disconnect MutationObserver so callbacks stop firing after bot is stopped
+        if (this.domObserver) {
+            this.domObserver.disconnect();
+            this.domObserver = null;
         }
         this.isRunning = false;
         this.stopAutoClear();

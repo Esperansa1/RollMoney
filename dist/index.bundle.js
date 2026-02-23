@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "925de6e7";
+  window.ROLLMONEY_VERSION = "39b0d96a";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -1261,20 +1261,21 @@ var RollMoney = (() => {
           this.maxWithdrawRetries = 3;
           this.autoClearInterval = null;
           this.scanInterval = null;
+          this.domObserver = null;
           this.isRunning = false;
           this.isRefreshing = false;
           this.id = "withdrawal-automation";
           this.priority = 1;
-          this.interval = 500;
+          this.interval = 1e4;
           this.settings = {
-            scanInterval: 500,
+            scanInterval: 1e4,
             autoClearSeconds: 5,
             enabled: true
           };
         }
         // Automation manager lifecycle methods
         start() {
-          this.startPeriodicScan(this.settings.scanInterval);
+          this.startObservedScan();
         }
         stop() {
           this.stopPeriodicScan();
@@ -1288,6 +1289,42 @@ var RollMoney = (() => {
         resume() {
           if (!this.isRunning) {
             this.start();
+          }
+        }
+        startObservedScan() {
+          this.startPeriodicScan(1e4);
+          this.domObserver = new MutationObserver((mutations) => {
+            if (!this.isRunning) return;
+            for (const mutation of mutations) {
+              if (mutation.type !== "childList") continue;
+              for (const node of mutation.addedNodes) {
+                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                const cards = node.classList?.contains("item-card") ? [node] : Array.from(node.querySelectorAll(".item-card"));
+                for (const card of cards) {
+                  this._handleNewCard(card);
+                }
+              }
+            }
+          });
+          this.domObserver.observe(document.body, {
+            childList: true,
+            subtree: true
+            // No attributes:true — we only need childList to detect new item-card nodes
+          });
+        }
+        _handleNewCard(card) {
+          try {
+            const itemData = this.dataScraper.extractItemData(card);
+            if (!itemData.name || itemData.name === "N/A") return;
+            if (this.dataScraper.isItemProcessed(itemData.name)) return;
+            const passes = this.itemFilter.filterItems([itemData]).length > 0;
+            if (!passes) return;
+            this.dataScraper.addProcessedItem(itemData.name);
+            this.processItemFast(itemData, 0).catch(
+              (err) => console.error(`Observer: error processing ${itemData.name}:`, err)
+            );
+          } catch (err) {
+            console.error("Observer: _handleNewCard error:", err);
           }
         }
         startPeriodicScan(intervalMs = 500) {
@@ -1307,12 +1344,16 @@ var RollMoney = (() => {
               console.error("Error during periodic scan:", error);
             }
           }, intervalMs);
-          this.startAutoClear(5);
+          this.startAutoClear(30);
         }
         stopPeriodicScan() {
           if (this.scanInterval) {
             clearInterval(this.scanInterval);
             this.scanInterval = null;
+          }
+          if (this.domObserver) {
+            this.domObserver.disconnect();
+            this.domObserver = null;
           }
           this.isRunning = false;
           this.stopAutoClear();
