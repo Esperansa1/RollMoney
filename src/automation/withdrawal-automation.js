@@ -9,6 +9,7 @@ export class WithdrawalAutomation {
         this.autoClearInterval = null;
         this.scanInterval = null;
         this.isRunning = false;
+        this.isRefreshing = false;
 
         // Automation manager integration
         this.id = 'withdrawal-automation';
@@ -237,33 +238,23 @@ export class WithdrawalAutomation {
     }
 
     async handleNotJoinableError(item) {
-        console.log(`🔄 Handling "not joinable" error for: ${item.name}`);
+        console.log(`Item sold to another user: ${item.name} — triggering page reload`);
 
-        try {
-            // Look for refresh button
-            const refreshButton = await DOMObserver.waitForElement(
-                'button[data-test="category-list-item"] img[src*="Knives.svg"]',
-                2000
-            ).then(img => img.closest('button'));
-
-            if (refreshButton) {
-                console.log(`🔄 Clicking refresh button for: ${item.name}`);
-                refreshButton.click();
-
-                // Wait for page to refresh
-                await DOMObserver.waitForPageStability(100, 3000);
-
-                // Try withdrawal again after refresh
-                console.log(`🔄 Retrying withdrawal after refresh for: ${item.name}`);
-                await this.attemptItemWithdrawalFast(item);
-            } else {
-                console.log(`❌ No refresh button found for: ${item.name}`);
-                await this.closeAnyModals();
-            }
-        } catch (error) {
-            console.error(`❌ Error handling not joinable for ${item.name}:`, error);
-            await this.closeAnyModals();
+        // Guard: if multiple items hit this path in the same scan cycle, only reload once
+        if (this.isRefreshing) {
+            console.log('Page reload already queued, skipping duplicate trigger');
+            return;
         }
+        this.isRefreshing = true;
+
+        // Stop further scan cycles immediately so no more items are attempted
+        this.stopPeriodicScan();
+
+        // Signal that the sniper should auto-restart after the reload
+        localStorage.setItem('sniper-auto-restart', '1');
+
+        console.log('Reloading page to clear stale items...');
+        location.reload();
     }
 
     async closeModalSuccessfully() {

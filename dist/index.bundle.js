@@ -1,5 +1,5 @@
 var RollMoney = (() => {
-  window.ROLLMONEY_VERSION = "c7e82498";
+  window.ROLLMONEY_VERSION = "6647c882";
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
@@ -492,12 +492,13 @@ var RollMoney = (() => {
           let yOffset = 0;
           dragHandle.xOffset = xOffset;
           dragHandle.yOffset = yOffset;
+          const DRAG_EXCLUDED_TAGS = /* @__PURE__ */ new Set(["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"]);
           const dragStart = (e) => {
+            if (DRAG_EXCLUDED_TAGS.has(e.target.tagName)) return;
+            if (e.target.closest("button, input, textarea, select, a")) return;
             initialX = e.clientX - xOffset;
             initialY = e.clientY - yOffset;
-            if (e.target === dragHandle) {
-              isDragging = true;
-            }
+            isDragging = true;
           };
           const dragEnd = () => {
             initialX = currentX;
@@ -519,7 +520,7 @@ var RollMoney = (() => {
               overlay.style.transform = `translate3d(${currentX}px, ${currentY}px, 0)`;
             }
           };
-          DOMUtils.addEventListeners(dragHandle, { mousedown: dragStart });
+          DOMUtils.addEventListeners(overlay, { mousedown: dragStart });
           DOMUtils.addEventListeners(document, {
             mouseup: dragEnd,
             mousemove: drag
@@ -1261,6 +1262,7 @@ var RollMoney = (() => {
           this.autoClearInterval = null;
           this.scanInterval = null;
           this.isRunning = false;
+          this.isRefreshing = false;
           this.id = "withdrawal-automation";
           this.priority = 1;
           this.interval = 500;
@@ -1429,26 +1431,16 @@ var RollMoney = (() => {
           }
         }
         async handleNotJoinableError(item) {
-          console.log(`\u{1F504} Handling "not joinable" error for: ${item.name}`);
-          try {
-            const refreshButton = await DOMObserver.waitForElement(
-              'button[data-test="category-list-item"] img[src*="Knives.svg"]',
-              2e3
-            ).then((img) => img.closest("button"));
-            if (refreshButton) {
-              console.log(`\u{1F504} Clicking refresh button for: ${item.name}`);
-              refreshButton.click();
-              await DOMObserver.waitForPageStability(100, 3e3);
-              console.log(`\u{1F504} Retrying withdrawal after refresh for: ${item.name}`);
-              await this.attemptItemWithdrawalFast(item);
-            } else {
-              console.log(`\u274C No refresh button found for: ${item.name}`);
-              await this.closeAnyModals();
-            }
-          } catch (error) {
-            console.error(`\u274C Error handling not joinable for ${item.name}:`, error);
-            await this.closeAnyModals();
+          console.log(`Item sold to another user: ${item.name} \u2014 triggering page reload`);
+          if (this.isRefreshing) {
+            console.log("Page reload already queued, skipping duplicate trigger");
+            return;
           }
+          this.isRefreshing = true;
+          this.stopPeriodicScan();
+          localStorage.setItem("sniper-auto-restart", "1");
+          console.log("Reloading page to clear stale items...");
+          location.reload();
         }
         async closeModalSuccessfully() {
           console.log(`\u2705 Closing modal after successful withdrawal`);
@@ -3848,29 +3840,45 @@ var RollMoney = (() => {
             width: "60px",
             fontSize: Theme.typography.fontSize.xs
           }, {
-            min: "0.1",
+            min: "0",
             max: "100",
             step: "0.1",
             value: "5.0",
             id: "sniper-price-threshold-input"
           });
+          thresholdInput.value = String(this.itemFilter.baseFilters.maxPercentageChange ?? 5.1);
           const thresholdPercent = UIComponents.createLabel("%", {
             marginBottom: "0",
             fontSize: Theme.typography.fontSize.sm
           });
           const applyBtn = UIComponents.createButton("Apply", "primary", "sm", () => {
-            const newThreshold = parseFloat(thresholdInput.value) / 100;
+            const rawValue = thresholdInput.value.trim();
+            if (rawValue === "") {
+              UIComponents.showNotification("Threshold cannot be empty", "error");
+              return;
+            }
+            const parsed = Number(rawValue);
+            if (isNaN(parsed)) {
+              UIComponents.showNotification("Invalid threshold: must be a number", "error");
+              return;
+            }
+            if (parsed < 0 || parsed > 100) {
+              UIComponents.showNotification("Threshold must be between 0 and 100", "error");
+              return;
+            }
+            this.itemFilter.updateBaseFilters({ maxPercentageChange: parsed });
             const marketMonitor = this.automationManager.getAutomation("market-monitor");
             if (marketMonitor && marketMonitor.updatePriceThreshold) {
-              marketMonitor.updatePriceThreshold(newThreshold);
-              const originalText = applyBtn.textContent;
-              applyBtn.textContent = "\u2713 Applied";
-              applyBtn.style.backgroundColor = Theme.colors.success;
-              setTimeout(() => {
-                applyBtn.textContent = originalText;
-                applyBtn.style.backgroundColor = "";
-              }, 1500);
+              marketMonitor.updatePriceThreshold(parsed / 100);
             }
+            UIComponents.showNotification(`Threshold set to ${parsed}%`, "success");
+            const originalText = applyBtn.textContent;
+            applyBtn.textContent = "\u2713 Applied";
+            applyBtn.style.backgroundColor = Theme.colors.success;
+            setTimeout(() => {
+              applyBtn.textContent = originalText;
+              applyBtn.style.backgroundColor = "";
+            }, 1500);
           });
           thresholdContainer.appendChild(thresholdLabel);
           thresholdContainer.appendChild(thresholdInput);
